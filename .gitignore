@@ -1,0 +1,35 @@
+# Local working copies and release packages
+/work/
+/outputs/
+/dist/
+/artifacts/
+/开发说明.txt
+# Runtime and generated test data
+/cache/
+/verification/
+/app.log
+*.exe
+*Tests.exe.config
+*.pdb
+*.zip
+*.vsdx
+*.vsd
+*.aux
+*.dvi
+*.log
+*.tmp
+*.bak
+~$*
+settings*.json*
+tex-bin.txt
+# Local tooling and credentials
+.vs/
+.vscode/
+.idea/
+.env
+.env.*
+*.pfx
+*.p12
+*.key
+.DS_Store
+Thumbs.db/LatencyBenchmark.exe.config

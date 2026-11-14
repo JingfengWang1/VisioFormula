@@ -1,0 +1,107 @@
+<!doctype html>
+<html><head><meta http-equiv="X-UA-Compatible" content="IE=edge"/>
+<meta charset="utf-8"/>
+<style>
+html,body{margin:0;padding:0;width:100%;height:100%;overflow:hidden;background:white;-ms-user-select:none}
+#viewport{position:absolute;left:12px;right:12px;top:12px;bottom:30px;overflow:hidden}
+#viewport svg{display:block;position:absolute;cursor:move}
+#hint{position:absolute;left:12px;right:12px;bottom:6px;text-align:center;font:11px 'Microsoft YaHei UI';color:#6f7d84;pointer-events:none}
+</style>
+<script>var vfScriptErrors=[];window.onerror=function(message,url,line){vfScriptErrors.push(String(message)+' @ '+line);return true;};</script>
+<script>{{POLYFILL}}</script>
+<script>
+var vf={revision:0,exactRevision:-1,quickRevision:-1,mode:'loading',error:'',quickMs:0,zoom:150,naturalWidth:0,naturalHeight:0,cssScale:1};
+var vfBooted=false,vfPending=null;
+window.MathJax={
+  startup:{typeset:false},
+  options:{enableMenu:false},
+  tex:{packages:['base','ams','boldsymbol','newcommand','configmacros','color'],
+       macros:{bm:['\\boldsymbol{#1}',1]},maxBuffer:50000,maxMacros:1000,
+       formatError:function(jax,error){throw error;}},
+  svg:{fontCache:'none'}
+};
+function vfHint(s){document.getElementById('hint').textContent=s;}
+function vfSetRevision(revision){
+  vf.revision=revision;vf.exactRevision=-1;vf.error='';vf.mode='pending';vfPending=null;
+  vfHint('输入中 · 等待最新预览');return true;
+}
+function vfClear(revision){
+  vfSetRevision(revision);document.getElementById('viewport').innerHTML='';vf.mode='empty';vfHint('输入 LaTeX 公式');
+}
+function vfFit(svg,width,height){
+  vf.naturalWidth=width;vf.naturalHeight=height;
+  width*=vf.cssScale;height*=vf.cssScale;
+  var viewport=document.getElementById('viewport'),w=viewport.clientWidth,h=viewport.clientHeight;
+  if(!(width>0&&height>0&&w>0&&h>0)){vf.displayWidth=vf.displayHeight=0;vf.availableWidth=w;vf.availableHeight=h;return;}
+  // A fixed reading zoom is the ceiling. Only long/tall expressions shrink to fit.
+  var scale=Math.min(w/width,h/height,vf.zoom===0?Infinity:vf.zoom/100);
+  var dw=width*scale,dh=height*scale;
+  svg.setAttribute('width',dw);svg.setAttribute('height',dh);
+  svg.setAttribute('preserveAspectRatio','xMidYMid meet');svg.style.verticalAlign='';
+  svg.style.width=dw+'px';svg.style.height=dh+'px';svg.style.left=(w-dw)/2+'px';svg.style.top=(h-dh)/2+'px';
+  vf.displayWidth=dw;vf.displayHeight=dh;vf.availableWidth=w;vf.availableHeight=h;vf.scale=scale;
+}
+function vfResize(){var svg=document.getElementById('viewport').querySelector('svg');if(svg)vfFit(svg,vf.naturalWidth,vf.naturalHeight);}
+function vfZoom(percent){vf.zoom=percent===0?0:Math.max(25,Math.min(400,Number(percent)||150));vfResize();}
+function vfViewport(dpi,physicalWidth){
+  // Account for both the monitor DPI and MSHTML's actual CSS-pixel ratio.
+  // On this host CSS pixels may be device pixels even in a DPI-aware window.
+  var cssWidth=document.documentElement.clientWidth;
+  vf.cssScale=(Number(dpi)||96)/96*(cssWidth>0&&physicalWidth>0?cssWidth/physicalWidth:1);
+  var v=document.getElementById('viewport'),s=vf.cssScale;
+  v.style.left=v.style.right=v.style.top=12*s+'px';v.style.bottom=30*s+'px';
+  document.getElementById('hint').style.fontSize=11*s+'px';vfResize();
+}
+window.addEventListener('resize',vfResize);
+function vfTypeset(tex){
+  MathJax.texReset();var node=MathJax.tex2svg(tex,{display:true}),svg=node.querySelector('svg');
+  if(!svg||node.querySelector('[data-mml-node="merror"]'))throw new Error('Incomplete formula');return svg;
+}
+function vfExport(tex){
+  if(!vfBooted)return JSON.stringify({pending:true});
+  try{return JSON.stringify({svg:vfSerialize(vfTypeset(tex))});}
+  catch(error){return JSON.stringify({error:String(error.message||error)});}
+}
+function vfSerialize(svg){
+  // MSHTML otherwise duplicates MathJax's explicit xmlns attribute during XML serialization.
+  var copy=svg.cloneNode(true);copy.removeAttribute('xmlns');copy.removeAttribute('xmlns:xlink');
+  return new XMLSerializer().serializeToString(copy);
+}
+function vfPreviewSvg(){var svg=document.getElementById('viewport').querySelector('svg');return svg?vfSerialize(svg):'';}
+function vfQuick(tex,revision,pointSize){
+  if(revision!==vf.revision||vf.exactRevision===revision)return false;
+  if(!vfBooted){vfPending={tex:tex,revision:revision,pointSize:pointSize};return false;}
+  var start=new Date().getTime();
+  try{
+    var svg=vfTypeset(tex);
+    if(revision!==vf.revision||vf.exactRevision===revision)return false;
+    var viewport=document.getElementById('viewport');viewport.innerHTML='';viewport.appendChild(svg);
+    var box=svg.viewBox.baseVal,em=(Number(pointSize)||12)*96/72;
+    vfFit(svg,box.width/1000*em,box.height/1000*em);
+    vf.mode='quick';vf.quickRevision=revision;vf.quickMs=new Date().getTime()-start;vf.error='';vfHint('');return true;
+  }catch(error){
+    vf.mode='quick-error';vf.error=String(error.message||error);
+    vfHint('输入尚未完成或快速预览不支持 · 暂保留上一结果');return false;
+  }
+}
+function vfExact(svgText,revision,width,height){
+  if(revision!==vf.revision)return false;
+  document.getElementById('viewport').innerHTML=svgText;
+  vfFit(document.getElementById('viewport').querySelector('svg'),width,height);
+  vf.exactRevision=revision;vf.mode='exact';vf.error='';vfPending=null;vfHint('');return true;
+}
+function vfExactError(revision){
+  if(revision!==vf.revision)return;
+  vf.mode='exact-error';vfHint('精确渲染未通过 · 请检查源码');
+}
+function vfGetState(){vf.booted=vfBooted;vf.scriptErrors=vfScriptErrors;vf.mathJaxVersion=String(MathJax.version||'not loaded');return JSON.stringify(vf);}
+</script>
+<script>{{MATHJAX}}</script>
+</head><body ondragstart="return false" onselectstart="return false" onmousedown="return false">
+<div id="viewport"></div><div id="hint">正在启动离线快速预览…</div>
+<script>
+MathJax.startup.promise.then(function(){
+  vfBooted=true;
+  if(vfPending){var p=vfPending;vfPending=null;vfQuick(p.tex,p.revision,p.pointSize);}
+}).catch(function(error){vf.mode='startup-error';vf.error=String(error);vfHint('快速预览未启动 · 本机 LaTeX 仍可渲染');});
+</script></body></html>

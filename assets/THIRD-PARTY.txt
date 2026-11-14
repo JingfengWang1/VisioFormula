@@ -1,0 +1,15 @@
+MathJax 3.2.2
+Source: https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-svg-full.js
+License: Apache License 2.0; see MathJax-LICENSE.txt.
+The distributed bundle has been transpiled to ES5 for the Windows MSHTML preview control.
+Build transformation: @babel/standalone 7.26.4, preset env, targets {ie:'11'}, modules:false, sourceType:'script', comments:false, compact:true.
+The Babel compiler itself is not needed or included at runtime.
+
+core-js-bundle 3.39.0
+Source: https://cdn.jsdelivr.net/npm/core-js-bundle@3.39.0/minified.js
+License: MIT; see core-js-LICENSE.txt.
+
+Babel generated runtime helpers
+License: MIT; see Babel-LICENSE.txt.
+
+All runtime files are included locally. No CDN is used when displaying formulas.
