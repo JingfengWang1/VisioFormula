@@ -1,18 +1,22 @@
 # Visio Formula
 
-一个面向 Windows 桌面 Visio 的轻量 LaTeX 公式工具。上方编辑源码、下方实时预览，公式可直接拖入 Visio，并随绘图保存源码，之后读回和原位更新。
+**将渲染好的公式以矢量图直接拖入 Visio，支持多种数学字体。**
 
-当前功能版本：**0.8.2**。采用 C# / WinForms / .NET Framework 4.8，x64 构建。所有公式渲染均在本机进行。
+Visio Formula 是一款面向 Windows 桌面 Visio 的公式工具：使用 TeX / LaTeX 数学语法编辑公式、实时预览，并根据图中文字的风格选择数学字体。渲染完成后，从预览区直接拖入 Visio，矢量公式在缩放后仍保持清晰，无需先手动保存文件再导入。
+
+目前提供 **7 种数学字体**：Latin Modern、Times / NewTX、STIX Two、Palatino / NewPX、Libertinus、Sans / NewTXsf 和 MathJax / TeX。公式源码、字体和字号随 Visio 文档保存，重开文档后可读回编辑、原位更新。
+
+当前功能版本：**0.8.2**。所有公式渲染均在本机进行。
 
 **后续 AI 或开发者请先阅读 [项目交接与实现说明](docs/AI_HANDOFF.md)，再阅读 [验证记录](docs/VALIDATION.md)。**
 
 ## 功能
 
-- 输入时使用离线 MathJax 快速预览；停止输入后自动生成本机 LaTeX 精确 SVG。
-- 从预览区直接拖入 Visio，支持复制粘贴、导出 SVG。
+- **矢量公式直接进入 Visio**：从预览区拖入，缩放保持清晰；也支持复制粘贴和导出 SVG。
+- **多种数学字体**：使用同一份 TeX 公式源码，切换 7 种数学字体、设置字号，与图中文字协调搭配。
+- **TeX 编辑与实时预览**：输入时使用离线 MathJax 快速预览；停止输入后自动生成所选字体的精确 SVG。
 - 源码、字体、字号保存在 Visio 图形的数据单元格中；保存并重开文档后仍可编辑。
 - 在 Visio 中选中公式，在工具中点击“编辑选中公式”；修改后原位更新，保留外层图形 ID、中心位置、旋转与已有等比缩放。
-- 七种字体：Latin Modern、Times / NewTX、STIX Two、Palatino / NewPX、Libertinus、Sans / NewTXsf、MathJax / TeX。
 - 参考 Quick LaTeX 使用习惯的快捷输入、44 条默认缩写规则、自定义规则导入导出、占位跳转、分式与上下标自动转换。
 - 语法高亮、独立撤销/重做、输入法组合输入处理。
 - 自动恢复当前草稿、新建公式、最近 20 条历史草稿。
@@ -31,6 +35,8 @@
 这是免安装的本地工具，不是 Visio Web 插件；无需安装 Visio 加载项或启用宏。保持程序与 Visio 使用相同的普通用户权限。
 
 ## 从源码构建
+
+项目采用 C# / WinForms / .NET Framework 4.8，x64 构建。
 
 在仓库根目录运行 PowerShell：
 
