@@ -41,15 +41,15 @@ public sealed class RealtimeController : IDisposable {
         string key=Key(f);
         for(var node=cache.First;node!=null;node=node.Next)if(node.Value.Key==key){
             var entry=node.Value;cache.Remove(node);
-            if(force||!File.Exists(entry.Result.Svg))return null;
+            if(force||!File.Exists(entry.Result.Svg)){entry.Result.Dispose();return null;}
             cache.AddFirst(entry);return entry.Result;
         }
         return null;
     }
     void Remember(Formula f,Rendered result){
         if(result==null||string.IsNullOrEmpty(result.Svg)||!File.Exists(result.Svg))return;
-        string key=Key(f);for(var node=cache.First;node!=null;node=node.Next)if(node.Value.Key==key){cache.Remove(node);break;}
-        cache.AddFirst(new CacheEntry{Key=key,Result=result});if(cache.Count>CacheLimit)cache.RemoveLast();
+        string key=Key(f);for(var node=cache.First;node!=null;node=node.Next)if(node.Value.Key==key){node.Value.Result.Dispose();cache.Remove(node);break;}
+        cache.AddFirst(new CacheEntry{Key=key,Result=result});if(cache.Count>CacheLimit){cache.Last.Value.Result.Dispose();cache.RemoveLast();}
     }
     async Task Run(Formula f,int rev,int delayMs,CancellationTokenSource cancellation,bool force) {
         CancellationToken token=cancellation.Token;
@@ -68,7 +68,7 @@ public sealed class RealtimeController : IDisposable {
             Rendered result=await compile(f,token);
             // The revision check also rejects old results from renderers that
             // completed too late to observe cancellation.
-            if(!CurrentRequest(rev,token))return;
+            if(!CurrentRequest(rev,token)){if(result!=null)result.Dispose();return;}
             Remember(f,result);
             Current=result;
             if(Ready!=null)Ready(rev,result);
@@ -77,6 +77,7 @@ public sealed class RealtimeController : IDisposable {
             if(CurrentRequest(rev,token)) { Current=null; if(Failed!=null)Failed(rev,ex); }
         } finally { if(entered)serial.Release(); cancellation.Dispose(); }
     }
-    public void Dispose() { disposed=true; Revision++; Current=null; CancelActive();cache.Clear(); }
+    public void ClearCache(){foreach(var entry in cache)entry.Result.Dispose();cache.Clear();Current=null;}
+    public void Dispose() { disposed=true; Revision++; Current=null; CancelActive();foreach(var entry in cache)entry.Result.Dispose();cache.Clear(); }
 }
 }

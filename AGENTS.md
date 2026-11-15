@@ -1,6 +1,6 @@
 # 项目开发约定
 
-先阅读 `docs/AI_HANDOFF.md` 与 `docs/VALIDATION.md`。当前功能基线为 0.8.2。
+先阅读 `docs/AI_HANDOFF.md` 与 `docs/VALIDATION.md`。当前功能基线为 0.9.0。
 
 ## 开发入口
 
@@ -14,6 +14,9 @@
 
 - 上方源码、下方预览，紧凑并适合与 Visio 并排；菜单、子窗口共用 Theme。
 - 预览缩放与导出物理字号相互独立；固定缩放下短公式不主动撑满面板。
+- 自动更新开关只放在设置中，默认关闭；绑定来自显式读回，撤销/外部修改时暂停，重开不恢复目标。
+- 缓存默认 20 MB / 7 天；保持跨进程租约、路径与白名单检查，保护预览/LRU/暂存/批量结果。
+- 测试必须设置 VISIOFORMULA_CACHE 到隔离目录；Rendered 的所有者和 Pin 的使用者分别负责释放。
 - 新输入立即使旧导出失效；取消和 revision 检查必须阻止旧结果覆盖新源码。
 - 拖放使用 Visio 原生 IDataObject；保留 PreviewDragFilter 的浏览器鼠标消息拦截。
 - 每次读取当前选中范围刷新活动 Visio 实例；更新和撤销属于目标形状的 Application。

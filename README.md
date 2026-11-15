@@ -6,7 +6,7 @@ Visio Formula 是一款面向 Windows 桌面 Visio 的公式工具：使用 TeX 
 
 目前提供 **7 种数学字体**：Latin Modern、Times / NewTX、STIX Two、Palatino / NewPX、Libertinus、Sans / NewTXsf 和 MathJax / TeX。公式源码、字体和字号随 Visio 文档保存，重开文档后可读回编辑、原位更新。
 
-当前功能版本：**0.8.2**。所有公式渲染均在本机进行。
+当前功能版本：**0.9.0**。所有公式渲染均在本机进行。
 
 **后续 AI 或开发者请先阅读 [项目交接与实现说明](docs/AI_HANDOFF.md)，再阅读 [验证记录](docs/VALIDATION.md)。**
 
@@ -21,6 +21,9 @@ Visio Formula 是一款面向 Windows 桌面 Visio 的公式工具：使用 TeX 
 - 语法高亮、独立撤销/重做、输入法组合输入处理。
 - 自动恢复当前草稿、新建公式、最近 20 条历史草稿。
 - 批量统一当前选中范围或整页公式的字体/字号，支持组内公式、取消、失败回滚与一次撤销。
+- 在设置中可开启自动原位更新：读回目标后，停止输入约 600 ms 且精确结果就绪时自动同步；支持 Visio 撤销，冲突时暂停。
+- 环境检查：识别 Visio / TeX 路径，实际测试七种字体，提供手动路径选择和可复制的诊断信息。
+- 缓存管理：默认自动清理，容量目标 20 MB、保留 7 天，保护其他窗口正在使用的结果。
 - 紧凑的上下布局、统一的设置和菜单样式、DPI 适配、预览缩放与完整适配。
 
 ## 运行条件
@@ -31,6 +34,8 @@ Visio Formula 是一款面向 Windows 桌面 Visio 的公式工具：使用 TeX 
 | MathJax 预览与 SVG 导出 | 已随程序附带离线资源，无须另装 LaTeX |
 | 六种本机 LaTeX 字体 | `latex.exe`、`dvisvgm.exe` 及相关宏包；当前主要验证环境为 TeX Live 2024 |
 | 拖入、复制、读回与更新 | Microsoft Visio 桌面版；当前实测 Visio Professional 2021 x64 |
+
+下载可运行版本请查看 [Releases](https://github.com/JingfengWang1/VisioFormula/releases)。解压整个程序文件夹后运行 `VisioFormula.exe`。
 
 这是免安装的本地工具，不是 Visio Web 插件；无需安装 Visio 加载项或启用宏。保持程序与 Visio 使用相同的普通用户权限。
 
@@ -68,7 +73,7 @@ Visio Formula 是一款面向 Windows 桌面 Visio 的公式工具：使用 TeX 
 
 ## LaTeX 工具查找
 
-按顺序查找：程序旁的 `tex-bin.txt`、系统 `PATH`、`D:\texlive` 与 `C:\texlive` 的版本子目录中的 `bin\windows`。
+优先使用“更多 → 环境检查”中手动选择并保存的路径；未指定时依次查找程序旁的 `tex-bin.txt`、系统 `PATH`、固定磁盘根目录下的 TeX Live 版本目录，以及常见 MiKTeX 安装目录。
 
 非标准安装路径可在程序旁创建 `tex-bin.txt`，只填工具所在目录，例如：
 
@@ -76,7 +81,7 @@ Visio Formula 是一款面向 Windows 桌面 Visio 的公式工具：使用 TeX 
 E:\TeXLive\2026\bin\windows
 ```
 
-此文件是本机配置，Git 默认忽略。程序不会自动安装 TeX 或宏包。
+此文件是本机配置，Git 默认忽略。程序不会自动安装 TeX 或宏包。新电脑可先打开“更多 → 环境检查”，再点击“测试渲染”逐项确认字体可用。
 
 ## 草稿和设置
 
@@ -84,13 +89,21 @@ E:\TeXLive\2026\bin\windows
 
 | 文件 | 内容 |
 | --- | --- |
-| `settings.json` | 字体、字号、预览缩放 |
+| `settings.json` | 字体、字号、预览缩放、自动更新、TeX 路径和缓存策略 |
 | `settings.quick-input.json` | 快捷输入开关与自定义规则 |
 | `settings.drafts.json` | 当前草稿、光标及最近 20 条历史 |
 
 当前草稿在编辑停顿约 450 ms 后保存，关闭时再保存。历史记录在新建、读回 Visio 公式、恢复另一草稿前归档当前非空内容；相同源码、字体、字号会去重。草稿恢复不恢复 Visio 图形的 COM 绑定。
 
 复制程序文件夹即可迁移程序；要迁移个人设置和草稿，需要另外复制上述用户配置目录。图中公式源码随 `.vsdx` 保存。
+
+详细步骤见 [0.9 使用说明](docs/USER_GUIDE.md)。
+
+## 0.9 新功能的使用
+
+- **自动原位更新**：在“更多 → 设置”启用，默认关闭；开关只在设置中。先“编辑选中公式”建立关联，之后源码、字体和字号可自动同步。同一内容不会重复写回；每次实际同步可在 Visio 撤销。检测到目标被修改或撤销后暂停，可重新读回或手动更新后继续。新建、恢复草稿、关闭文档或删除目标会解除关联；重开工具不会恢复旧目标。Visio 文档仍由用户保存。
+- **环境检查**：区分 Visio 未安装、未运行和可连接状态；显示工具路径与版本。快速检查只确认基本环境，七种字体需要点击“测试渲染”实际编译。缺少本机 TeX 时仍可使用 MathJax 字体。手动选择的路径在关闭检查窗口后保存。
+- **缓存管理**：新缓存位于 `%LOCALAPPDATA%\VisioFormula\Cache`，不会进入同步的程序目录。默认保留 7 天、容量目标 20 MB，可调整；使用中的文件可能暂时超过目标。立即清理会删除可释放的缓存，保留草稿、个人配置和文档。可勾选清理当前程序目录下已识别的旧版缓存。
 
 ## 测试
 
@@ -100,6 +113,7 @@ E:\TeXLive\2026\bin\windows
 .\test-editor.ps1
 .\test-theme.ps1
 .\test-realtime.ps1
+.\test-maintenance.ps1  # 包括独立 Visio 实例；无 Visio 环境可加 -WithoutVisio
 ```
 
 Visio 交互测试使用独立测试文档；其中原生复制测试会使用系统剪贴板：

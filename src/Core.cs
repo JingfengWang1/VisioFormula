@@ -22,45 +22,24 @@ public sealed class Formula {
     public double BaseHeight;
     public Formula Clone() { return (Formula)MemberwiseClone(); }
 }
-public sealed class Rendered {
+public sealed class Rendered : IDisposable {
     public Formula Formula;
     public string Directory, Svg, Png;
     public double Width, Height;
+    CacheLease lease;IDisposable ownership;
+    internal void Attach(CacheLease value){lease=value;ownership=value.Retain();}
+    public IDisposable Pin(){return lease==null?new ActionLease(null):lease.Retain();}
+    public void Dispose(){var hold=Interlocked.Exchange(ref ownership,null);if(hold!=null)hold.Dispose();GC.SuppressFinalize(this);}
+    ~Rendered(){if(ownership!=null)ownership.Dispose();}
 }
 public static class Renderer {
-    public static readonly string Cache = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "cache");
-    public static string FindTool(string name) {
-        var dirs = new List<string>();
-        string config = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "tex-bin.txt");
-        if (File.Exists(config)) dirs.Add(File.ReadAllText(config).Trim());
-        dirs.AddRange((Environment.GetEnvironmentVariable("PATH") ?? "").Split(';'));
-        foreach (string drive in new [] { "D:\\", "C:\\" }) {
-            string root = Path.Combine(drive, "texlive");
-            if (System.IO.Directory.Exists(root)) {
-                var years = System.IO.Directory.GetDirectories(root); Array.Sort(years); Array.Reverse(years);
-                foreach (string year in years) dirs.Add(Path.Combine(year, "bin", "windows"));
-            }
-        }
-        foreach (string dir in dirs) { try { string p = Path.Combine(dir.Trim('"'), name + ".exe"); if(File.Exists(p)) return p; } catch {} }
-        throw new Exception("找不到 " + name + "。请将 TeX 的 bin 路径写入程序旁的 tex-bin.txt。");
-    }
-    static void Run(string tool, string args, string cwd,CancellationToken token) {
-        token.ThrowIfCancellationRequested();
-        var psi = new ProcessStartInfo(FindTool(tool), args) { WorkingDirectory=cwd, UseShellExecute=false, CreateNoWindow=true, RedirectStandardOutput=true, RedirectStandardError=true };
-        using (var p = Process.Start(psi)) {
-            Task<string> stdout=p.StandardOutput.ReadToEndAsync(), stderr=p.StandardError.ReadToEndAsync();
-            var clock=Stopwatch.StartNew();
-            using(token.Register(delegate { try { if(!p.HasExited)p.Kill(); } catch {} })) {
-                while(!p.WaitForExit(40)) {
-                    token.ThrowIfCancellationRequested();
-                    if(clock.ElapsedMilliseconds>30000) { p.Kill(); throw new Exception(tool + " 编译超时。"); }
-                }
-            }
-            token.ThrowIfCancellationRequested();
-            string log=stdout.Result+stderr.Result;
-            File.WriteAllText(Path.Combine(cwd, tool + "-output.txt"),log,Encoding.UTF8);
-            if(p.ExitCode!=0) throw new Exception(log.Length>3000 ? log.Substring(log.Length-3000) : log);
-        }
+    public static string Cache {get{return CacheStore.Default.Root;}}
+    public static string FindTool(string name){return Toolchain.Find(name);}
+    static void Run(string tool,string args,string cwd,string selected,CancellationToken token){
+        string file=Toolchain.Find(tool,selected);if(tool=="latex")args=Toolchain.EngineArguments(file,token)+args;
+        int code;string log=Toolchain.Execute(file,args,cwd,30000,token,out code);
+        File.WriteAllText(Path.Combine(cwd,tool+"-output.txt"),log,Encoding.UTF8);
+        if(code!=0)throw new Exception(log.Length>3000?log.Substring(log.Length-3000):log);
     }
     public static string Body(string source) {
         string s=source.Trim();
@@ -74,19 +53,22 @@ public static class Renderer {
         return s;
     }
     public static Rendered Render(Formula f) { return Render(f,CancellationToken.None); }
-    public static Rendered Render(Formula f,CancellationToken token) {
+    public static Rendered Render(Formula f,CancellationToken token){return Render(f,token,null);}
+    public static Rendered Render(Formula f,CancellationToken token,string texDirectory) {
         token.ThrowIfCancellationRequested();
         Validate(f);
         MathFont mathFont=FontCatalog.Get(f.Font);
         if(mathFont.Id=="mathjax")throw new Exception("MathJax 字体需要由工具的内嵌渲染器生成。");
-        string dir=Path.Combine(Cache,Guid.NewGuid().ToString("N")); System.IO.Directory.CreateDirectory(dir);
+        using(var lease=CacheStore.Default.Create()){
+        string dir=lease.Directory;
         string size=f.Size.ToString("0.###",CultureInfo.InvariantCulture);
         string tex="\\documentclass[border=0pt]{standalone}\n\\usepackage{amsmath}\n"+mathFont.Preamble+"\n\\usepackage{bm,xcolor}\n"+
             "\\begin{document}\n\\fontsize{"+size+"}{"+(f.Size*1.2).ToString("0.###",CultureInfo.InvariantCulture)+"}\\selectfont\n$\\displaystyle "+Body(f.Source)+"$\n\\end{document}\n";
         File.WriteAllText(Path.Combine(dir,"formula.tex"),tex,new UTF8Encoding(false));
-        Run("latex","-interaction=nonstopmode -halt-on-error -no-shell-escape formula.tex",dir,token);
-        Run("dvisvgm","--no-fonts=1 --exact-bbox --bbox=min --output=formula.svg formula.dvi",dir,token);
-        return StoreSvg(f,dir,File.ReadAllText(Path.Combine(dir,"formula.svg")),token);
+        Run("latex","-interaction=nonstopmode -halt-on-error -no-shell-escape formula.tex",dir,texDirectory,token);
+        Run("dvisvgm","--no-fonts=1 --exact-bbox --bbox=min --output=formula.svg formula.dvi",dir,texDirectory,token);
+        return StoreSvg(f,dir,File.ReadAllText(Path.Combine(dir,"formula.svg")),token,lease);
+        }
     }
     public static void Validate(Formula f){
         if(string.IsNullOrWhiteSpace(f.Source)) throw new Exception("请输入公式。");
@@ -102,10 +84,11 @@ public static class Renderer {
         if(width<=0||height<=0)throw new Exception("公式没有可导出的图形。");
         root.SetAttribute("width",width.ToString("R",CultureInfo.InvariantCulture)+"pt");root.SetAttribute("height",height.ToString("R",CultureInfo.InvariantCulture)+"pt");
         root.SetAttribute("color","black");root.RemoveAttribute("style");
-        string dir=Path.Combine(Cache,Guid.NewGuid().ToString("N"));System.IO.Directory.CreateDirectory(dir);
-        return StoreSvg(f,dir,root.OuterXml,token);
+        using(var lease=CacheStore.Default.Create()){
+            return StoreSvg(f,lease.Directory,root.OuterXml,token,lease);
+        }
     }
-    static Rendered StoreSvg(Formula f,string dir,string content,CancellationToken token){
+    static Rendered StoreSvg(Formula f,string dir,string content,CancellationToken token,CacheLease lease){
         string svg=Path.Combine(dir,"formula.svg");
         var xml=new XmlDocument { XmlResolver=null }; xml.LoadXml(content);
         var root=xml.DocumentElement;
@@ -114,12 +97,12 @@ public static class Renderer {
         var metadata=xml.CreateElement("metadata",root.NamespaceURI); metadata.SetAttribute("id","VisioFormula");
         metadata.InnerText=new JavaScriptSerializer().Serialize(f); root.AppendChild(metadata); xml.Save(svg);
         token.ThrowIfCancellationRequested();
-        return new Rendered { Formula=f.Clone(), Directory=dir, Svg=svg, Png=Path.Combine(dir,"formula.png"), Width=width, Height=height };
+        var result=new Rendered { Formula=f.Clone(), Directory=dir, Svg=svg, Png=Path.Combine(dir,"formula.png"), Width=width, Height=height };result.Attach(lease);return result;
     }
 }
 public sealed partial class Bridge : IDisposable {
     public dynamic App;
-    dynamic stage;
+    dynamic stage;IDisposable stagePin;
     readonly bool followActive;
     public Bridge(bool create) {
         followActive=true;
@@ -170,6 +153,7 @@ public sealed partial class Bridge : IDisposable {
     public dynamic Stage(Rendered r) {
         RefreshActive();
         if((object)stage!=null){bool same=false;try{same=SameApplication(stage.Application,App);}catch(COMException){}catch(InvalidComObjectException){}if(!same)CloseStage();}
+        if(stagePin!=null)stagePin.Dispose();stagePin=r.Pin();
         if(stage==null) stage=App.Documents.AddEx("",0,64|128|256);
         dynamic page=stage.Pages[1];
         for(int i=page.Shapes.Count;i>=1;i--) page.Shapes[i].Delete();
@@ -229,6 +213,7 @@ public sealed partial class Bridge : IDisposable {
     }
     void CloseStage(){
         if((object)stage!=null) { try { NativeDrag.Flush(); stage.Saved=true; stage.Close(); } catch {} finally{stage=null;} }
+        if(stagePin!=null){stagePin.Dispose();stagePin=null;}
     }
     public void Dispose() {
         CloseStage();

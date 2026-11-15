@@ -1,6 +1,6 @@
 # Visio Formula：项目交接与实现说明
 
-本文面向接手二次开发的 AI 和开发者，依据仓库中的实际实现整理。功能基线为 **0.8.2**，整理日期为 **2026-11-14（Asia/Shanghai）**。当前仓库发布工作主要整理源码和文档，不引入新的应用功能。
+本文面向接手二次开发的 AI 和开发者，依据仓库中的实际实现整理。功能基线为 **0.9.0**，更新日期为 **2026-11-15（Asia/Shanghai）**。本版新增环境检查、设置中的可选自动原位更新和 20 MB 缓存管理。
 
 先读本文，再读 [验证记录](VALIDATION.md) 和 [开发约定](../AGENTS.md)。仓库根目录的 `src/` 是唯一开发入口；本机 `work/` 和 `outputs/` 只是未纳入 Git 的工作资料与发布快照。不要在多个副本间交叉修改。
 
@@ -21,13 +21,13 @@
 - 快捷输入参考用户的 Obsidian Quick LaTeX 使用习惯，支持自定义规则；同时保留可靠的撤销/重做和语法高亮。
 - 可统一选中范围或整页中已有公式的字体、字号。
 
-当前已实现上述主要流程。尚未实现完整的 TeX 编辑器、源码错误精确定位、独立安装器、自动更新和持续集成；详见第 13 节。
+当前已实现上述主要流程。尚未实现完整的 TeX 编辑器、源码错误精确定位、独立安装器、软件自动升级和持续集成；详见第 13 节。
 
 ## 2. 技术栈与代码地图
 
 运行平台是 Windows x64、.NET Framework 4.8。UI 使用 WinForms；预览嵌入 `WebBrowser`，其内核是 Windows MSHTML。源码使用 Windows 自带的 C# 5 编译器，当前没有 `.csproj`、SDK 风格项目或 NuGet 依赖。
 
-仓库有 13 个应用源文件和 8 个测试/基准源文件。
+仓库有 18 个应用源文件和 10 个测试/基准源文件。
 
 | 文件 | 主要职责 |
 | --- | --- |
@@ -41,12 +41,17 @@
 | [src/BatchStyle.cs](../src/BatchStyle.cs) | Bridge 扩展、范围遍历、目标快照、批量校验与事务 |
 | [src/FormulaEditor.cs](../src/FormulaEditor.cs) | RichTextBox、语法高亮、自管撤销、IME、粘贴与键盘处理 |
 | [src/QuickInput.cs](../src/QuickInput.cs) | 纯文本变换、缩写规则、占位位置、分式/上下标等转换 |
-| [src/Settings.cs](../src/Settings.cs) | 字体、字号和预览缩放的加载与保存 |
+| [src/Settings.cs](../src/Settings.cs) | 字体、字号、缩放、自动更新、TeX 路径与缓存策略的加载和保存 |
 | [src/WorkspaceState.cs](../src/WorkspaceState.cs) | 快捷输入配置、当前/历史草稿、带备份的 JSON 文件存储 |
 | [src/EditorDialogs.cs](../src/EditorDialogs.cs) | 快捷输入设置、最近草稿、批量统一样式窗口 |
 | [src/Theme.cs](../src/Theme.cs) | 公共颜色、圆角面板、按钮、菜单、复选框、字体选择器和草稿列表 |
+| [src/AppMaintenance.cs](../src/AppMaintenance.cs) | 设置入口、首次环境检查、空闲清理、自动更新调度及预览缓存持有 |
+| [src/CacheStore.cs](../src/CacheStore.cs) | 缓存标记、跨进程文件租约、容量/过期策略和保守删除边界 |
+| [src/EnvironmentCheck.cs](../src/EnvironmentCheck.cs) | 工具发现、版本探测、子进程超时取消、环境诊断 |
+| [src/UpdateBinding.cs](../src/UpdateBinding.cs) | 已读回目标的状态快照、外部修改/撤销识别和暂停状态 |
+| [src/MaintenanceDialogs.cs](../src/MaintenanceDialogs.cs) | 通用设置、环境检查、缓存管理窗口 |
 
-测试源码为 `EditorTests.cs`、`ThemeTests.cs`、`RealtimeTests.cs`、`BatchTests.cs`、`ConnectionTests.cs`、`IntegrationTests.cs`、`FontTests.cs`、`LatencyBenchmark.cs`。
+测试源码为 `EditorTests.cs`、`ThemeTests.cs`、`RealtimeTests.cs`、`BatchTests.cs`、`ConnectionTests.cs`、`IntegrationTests.cs`、`FontTests.cs`、`LatencyBenchmark.cs`，另有 `MaintenanceTests.cs` 和实际鼠标验证用的 `InteractiveTests.cs`。
 
 ```mermaid
 flowchart TD
@@ -82,13 +87,11 @@ flowchart TD
 
 该模式同时复制完整 `assets` 与 `VisioFormula.exe.config`。分发至少需要 EXE、该 config 和完整 assets；只复制 EXE 不够。不要直接覆盖仍在运行的程序；让应用正常关闭以保存草稿后再替换。
 
-本机 TeX 的实际查找顺序由 `Renderer` 决定：
+本机 TeX 查找集中在 `Toolchain`：设置中的 `TexDirectory` → 未指定时读程序旁 `tex-bin.txt` → PATH → 固定磁盘根目录 `texlive/<版本>/bin/windows` → Program Files / LocalAppData 下常见 MiKTeX 目录。指定路径无效时明确报错，不静默使用另一套 TeX；选择新目录后清空会话渲染缓存。兼容旧 tex-bin.txt。
 
-1. 程序旁 `tex-bin.txt` 中指定的目录。
-2. 进程的 `PATH`。
-3. `D:\texlive`、`C:\texlive` 下的版本目录及其 `bin\windows`。
+环境窗口先快速检查 Visio COM、工具版本、离线资源和设置/缓存可写性，点击“测试渲染”才逐个实际编译六种 TeX 字体及内嵌 MathJax。MathJax 测试仍走共享 SVG 输出。完整测试会暂停主窗口的渲染/自动同步，关闭后恢复；路径选择在关闭检查窗口后保存。
 
-当前没有注册表扫描、任意安装盘搜索、TeX 安装器或宏包自动下载。非标准 TeX Live/MiKTeX 路径可用 `tex-bin.txt` 指定，前提是包含所需的 `latex.exe`、`dvisvgm.exe` 和宏包。若启动后修改系统 PATH，需要重开应用。
+首次生产启动后台执行轻量检查；隔离测试设置路径不触发用户目录中的自动检查/清理。版本探测超时 5 秒；编译工具超时 30 秒，支持取消并异步排空 stdout/stderr。MiKTeX 编译附加 `--disable-installer`，避免诊断隐式安装宏包，依据 [MiKTeX 官方说明](https://docs.miktex.org/manual/texfeatures.html)。未在本机实际安装 MiKTeX 做端到端验证；已验证 TeX Live 和缺失工具路径。
 
 当前实测环境为 TeX Live 2024 和 Visio Professional 2021 x64。MathJax 字体的精确 SVG 路径不依赖本机 TeX；普通六种 TeX 字体仍需要 TeX。窗口设置、草稿与运行缓存分开存储，见第 10 节。
 
@@ -114,14 +117,14 @@ flowchart TD
 
 `Renderer.Validate` 限制非空源码、最长 50000 字符及 4–96 pt 字号。`Body` 去掉常见外层数学定界符，将 `align`/`align*` 包装转换为 `aligned`，移除 equation 外壳；并非完整 LaTeX 文档解析器。
 
-每次编译在程序目录 `cache` 下创建 GUID 子目录，生成 `formula.tex`。模板使用 `standalone`、零边框、amsmath、字体宏包、bm 和 xcolor；按指定字号设置字体与行高，以 displaystyle 排版。主要命令：
+每次编译在 `%LOCALAPPDATA%\VisioFormula\Cache` 下创建 GUID 子目录，生成 `formula.tex`。模板使用 `standalone`、零边框、amsmath、字体宏包、bm 和 xcolor；按指定字号设置字体与行高，以 displaystyle 排版。主要命令：
 
 ```text
 latex -interaction=nonstopmode -halt-on-error -no-shell-escape formula.tex
 dvisvgm --no-fonts=1 --exact-bbox --bbox=min --output=formula.svg formula.dvi
 ```
 
-stdout/stderr 异步读取，避免管道填满造成假死；每个工具超时 30 秒，取消会终止子进程。日志写入对应缓存目录。目前不调用 dvipng；`Rendered.Png` 是保留字段，不代表现行渲染链路。
+stdout/stderr 异步读取，避免管道填满造成假死；每个工具超时 30 秒，取消会终止子进程。日志写入对应缓存目录。`Rendered` 现在实现 IDisposable，输出持有缓存租约；目前不调用 dvipng；`Rendered.Png` 是保留字段，不代表现行渲染链路。
 
 SVG 使用路径字形，接收电脑不必安装对应数学字体。读取 SVG 根元素的 pt 尺寸并除以 72 得到 Visio 使用的英寸；随后嵌入公式元数据。后续改单位换算时必须回归已有文档的尺寸与缩放兼容性。
 
@@ -228,6 +231,18 @@ SVG 中写入 id 为 `VisioFormula` 的 metadata。Visio 外层公式组在 User
 
 测试这条链路时，应同时检查视觉尺寸、Shape ID、中心、角度、元数据、保存重开以及单次撤销。只检查画面出现新公式是不够的。
 
+### 7.1 可选自动原位更新（0.9）
+
+开关位于“更多 → 设置”，主窗口没有开关；`Preferences.AutoUpdate` 默认 false 并持久化。恢复偏好不恢复 COM 目标。必须显式读回一个完整公式组才能建立 `UpdateBinding`。
+
+`UpdateBinding` 保存形状引用、文档/页/形状标签、完整 Formula JSON 和几何快照。100 ms 的 UI 定时器在停止输入至少 600 ms、`ready` 为当前 RealtimeController 结果且内容一致时尝试写回；重复内容跳过。慢编译完成后可立即同步，不额外再等 600 ms。
+
+每次提交前校验目标；空闲时约 500 ms 检查一次。源码/元数据或几何变化（含 Visio Undo）导致暂停，删除/关闭导致解除绑定；已暂停目标也继续检查是否消失。暂停不会因再次输入自动解除，重新读回或明确手动更新后恢复。读取新选区失败也暂停旧关联，避免修改错误目标。
+
+自动写入复用 `Bridge.Update` 和目标 Application 的 undo scope。每次实际同步是一条 Visio 撤销记录，不长期开启跨输入事务。编辑器自身 Ctrl+Z 仍独立管理源码。改变 Visio 选区不会转移绑定；编译过程中显式读回新目标则递增渲染 revision，使旧结果失效。
+
+新建、恢复草稿、批量修改命中目标时清除绑定。设置/环境/缓存窗口通过 maintenanceDepth 暂停同步；批量操作通过 busy 暂停。窗口上的状态和提示显示目标及暂停原因，不自动保存用户的 Visio 文档。
+
 ## 8. 批量统一样式
 
 入口可针对当前选择或整页。`Collect` 递归遍历组内形状，遇到完整公式组就记录并停止向其内部遍历，用 ID 去重，跳过普通图形。
@@ -278,7 +293,7 @@ Alt+Shift+M/A/C 分别插入矩阵、对齐和 cases 环境；相关环境内提
 
 | 文件 | 内容与写入方式 |
 | --- | --- |
-| `settings.json` | Version、Font、Size、Zoom；临时文件后原子替换，损坏时用默认值 |
+| `settings.json` | Version、Font、Size、Zoom、AutoUpdate、AutoClean、CacheLimitMB、CacheDays、TexDirectory、EnvironmentChecked；原子替换 |
 | `settings.quick-input.json` | 快捷开关和规则；保存按钮提交；带 `.bak` 备份 |
 | `settings.drafts.json` | Version=1、Current、History；原子替换并保留 `.bak` |
 
@@ -294,13 +309,23 @@ Alt+Shift+M/A/C 分别插入矩阵、对齐和 cases 环境；相关环境内提
 - 新建保留当前字体字号、清空内容并断开目标；恢复草稿也断开 Visio 目标。
 - 启动恢复不恢复进程内 COM 对象，也不恢复上一进程的撤销栈。
 
-程序旁的 `cache/` 存 TeX 中间文件、SVG 和编译日志，会逐步增长；当前没有磁盘缓存自动清理机制。16 项 LRU 仅限制内存索引，不删除旧磁盘目录。程序目录需要可写。
+### 10.1 缓存策略与生命周期（0.9）
+
+默认目录为 `%LOCALAPPDATA%\VisioFormula\Cache`；测试通过进程环境变量 `VISIOFORMULA_CACHE` 使用隔离目录。默认 AutoClean=true、CacheLimitMB=20、CacheDays=7。启动后空闲及每分钟尝试清理：先按最后使用时间移除过期/最旧的可释放项，向 20 MB 目标收敛。正在持有的内容可暂时超额。手动清理移除全部可释放项。
+
+每个 GUID 目录包含 `.vf-cache` 标记和 `.lease` 文件。创建/扫描/删除用按根路径散列的命名互斥锁串行化；编译期间及 Rendered 存活期间持有不能独占打开的文件租约。清理只有独占取得租约后才可删除，因此其他进程/窗口也受保护。当前预览通过 `Rendered.Pin()`、16 项 LRU 通过 Rendered 所有权、Visio 暂存对象通过 stagePin 保持引用；批量结果在提交/取消 finally 释放。
+
+`Renderer.Render` / `RenderMathJax` 返回的结果由调用者负责 Dispose；将结果交给 RealtimeController 后由其管理缓存所有权。额外使用期间调用 Pin 并在结束后释放。旧请求取消后迟到的结果也必须 Dispose。不要依赖 GC 作为日常清理机制。
+
+删除前校验绝对路径、父目录、GUID 名称、标记、文件白名单；拒绝目录链接/reparse point、子目录和未知文件，不递归删除任意目录。生成新类型的中间文件时需要同步白名单和测试。遇到文件被占用/无权限则跳过。
+
+当前程序旁旧 `cache/` 默认仅识别，手动勾选后清理已确认的 GUID 编译目录；同目录其他旧版进程运行时保留。不会扫描或删除其他安装副本中的目录。草稿、设置、导出的 SVG 与 Visio 文档不属于清理范围。
 
 迁移电脑时复制整个程序文件夹；个人偏好、快捷输入和草稿需另外复制上述 LocalAppData 目录。图中源码由 `.vsdx` 自身携带。
 
 ## 11. 界面修改注意事项
 
-主窗口逻辑 client size 约 432×590，最小约 344×460。保持输入在上、预览在下；更多菜单承载设置、最近草稿和批量操作。
+主窗口逻辑 client size 约 432×590，最小约 344×460。保持输入在上、预览在下；更多菜单承载设置、环境检查、缓存管理、快捷输入、最近草稿和批量操作。
 
 公共控件位于 Theme，新增子菜单或对话框应复用这些控件，避免重新出现系统默认的旧式边框与按钮。字体、字号和 pt 单位需检查同一水平中心，而不只比较控件 Top 值。
 
@@ -320,6 +345,8 @@ Alt+Shift+M/A/C 分别插入矩阵、对齐和 cases 环境；相关环境内提
 | TeX 字体/模板 | test-fonts.ps1；必要时 test-latency.ps1 |
 | 单个导入、复制、保存重开、更新 | run-tests.ps1 |
 | 批量范围与事务 | test-batch.ps1 |
+| 环境、缓存、自动更新、新窗口 DPI | test-maintenance.ps1；无 Visio 可用 -WithoutVisio，并标记未测集成部分 |
+| 实际鼠标拖放 | build-interactive-tests.ps1 构建后运行 InteractiveTests.exe；关闭测试工具会保存并关闭其自建绘图 |
 | 多 Visio 实例连接与目标归属 | test-connection.ps1；按 ACTIVATE 提示真实切换前台窗口 |
 
 Visio 测试只能操作自己创建且明确拥有的实例/文档。创建实例后应直接传给 Bridge；不要先创建一个 Bridge(true) 再覆盖 Application，旧写法可能留下孤立进程。通过 finally 清理自己创建的资源，不操作用户正式绘图。
@@ -334,17 +361,17 @@ Visio 测试只能操作自己创建且明确拥有的实例/文档。创建实�
 
 1. **错误定位**：当前以编译错误提示/日志为主，没有把 TeX 行列位置可靠映射回源码编辑区。
 2. **浏览器内核**：MSHTML 要求附带 JS 保持 ES5 兼容。迁移 WebView2 会改变安装依赖、包体积、调用时序和拖放，需要单独设计。
-3. **缓存管理**：没有磁盘缓存保留策略、清理界面或后台 TeX 常驻服务；降低精确预览延迟仍有进程启动成本。
+3. **精确渲染延迟**：已经有缓存清理与会话 LRU，尚无后台 TeX 常驻服务；每次未缓存编译仍有进程启动成本。
 4. **编辑性能**：长文本的全量高亮和 300 份撤销快照可能消耗较多内存；目前没有语法树或增量文档模型。
 5. **内容范围**：面向数学片段与英文说明；完整文档、TikZ、中文排版及任意自定义宏包工作流未作为现行保证。MathJax 也不能覆盖所有 TeX 命令。
 6. **草稿管理**：最近 20 条归档不是连续版本历史，尚无收藏、命名、搜索或可视化逐项删除管理。
 7. **对象选择**：尚不自动把被选中的内部 SVG 子形状提升为公式外层组。取消组合可能破坏可编辑元数据。
 8. **数据校验**：现有持久数据有基本版本和范围校验，进一步强化 NaN/Infinity、超大或语义损坏数据需要补充测试。
-9. **版本元信息**：UI 功能版号为 0.8.2，但 `app.manifest` 的 assemblyIdentity 仍为 0.7.0.0。尚未集中管理版本，不应把 manifest 值当成功能版号。
+9. **版本元信息**：UI、程序集与 manifest 已更新到 0.9.0；后续发布仍须同步这些入口和文档版本。
 10. **打包与授权**：没有安装器、自动更新或 CI 发布流程；项目自有代码的开源许可证尚未指定，第三方许可证已经保留。
 11. **输入边界**：TeX 使用 `-no-shell-escape`，但这不是操作系统文件访问沙箱；当前产品针对本机用户自己输入的公式。
 
-优先级建议：先处理可定位的编译错误与缓存清理，再改善选中子图形的读回体验、草稿管理和版本/发布自动化。修改持久协议、Visio 连接或撤销事务之前，先建立旧文档回归样本。
+优先级建议：处理可定位的编译错误，再改善选中子图形的读回体验、草稿管理和版本/发布自动化。修改持久协议、Visio 连接或撤销事务之前，先建立旧文档回归样本。
 
 ## 14. 给下一位 AI 的开始步骤
 

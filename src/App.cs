@@ -9,8 +9,10 @@ using System.Collections.Generic;
 using System.Windows.Forms;
 
 [assembly:TargetFramework(".NETFramework,Version=v4.8")]
+[assembly:System.Reflection.AssemblyVersion("0.9.0.0")]
+[assembly:System.Reflection.AssemblyFileVersion("0.9.0.0")]
 namespace VisioFormula {
-public sealed class MainForm : Form {
+public sealed partial class MainForm : Form {
     FormulaEditor source=new FormulaEditor(); ComboBox font=new FontChoice(); NumericUpDown size=new NumericUpDown();
     WebBrowser picture=new WebBrowser(); Label status=new Label();
     Button edit=new ActionButton{Quiet=true},update=new ActionButton{Quiet=true},copy=new ActionButton{Primary=true},export=new ActionButton();
@@ -28,11 +30,11 @@ public sealed class MainForm : Form {
     readonly System.Windows.Forms.Timer settingsTimer=new System.Windows.Forms.Timer { Interval=350 };
     public MainForm():this(new SettingsStore()){}
     public MainForm(SettingsStore settings) {
-        this.settings=settings;Preferences initial=settings.Load();workspace=new WorkspaceState(settings.FilePath);Draft draft=workspace.Data.Current;if(draft!=null){initial.Font=draft.Formula.Font;initial.Size=draft.Formula.Size;}realtime=new RealtimeController(new Func<Formula,CancellationToken,Task<Rendered>>(RenderExactAsync));
+        this.settings=settings;Preferences initial=settings.Load();preferences=initial;workspace=new WorkspaceState(settings.FilePath);Draft draft=workspace.Data.Current;if(draft!=null){initial.Font=draft.Formula.Font;initial.Size=draft.Formula.Size;}realtime=new RealtimeController(new Func<Formula,CancellationToken,Task<Rendered>>(RenderExactAsync));
         SuspendLayout();
         AutoScaleDimensions=new SizeF(96,96);AutoScaleMode=AutoScaleMode.Dpi;
         Font=new Font("Microsoft YaHei UI",9F);ForeColor=Theme.Ink;BackColor=Theme.Background;
-        Text="Visio Formula 0.8.2";ClientSize=new Size(432,590);MinimumSize=new Size(360,460);
+        Text="Visio Formula 0.9.0";ClientSize=new Size(432,590);MinimumSize=new Size(360,460);
         StartPosition=FormStartPosition.Manual;Location=new Point(30,60);DoubleBuffered=true;
         string iconPath=Path.Combine(AppDomain.CurrentDomain.BaseDirectory,"assets","formula.ico");if(File.Exists(iconPath))Icon=new Icon(iconPath);
         var layout=new TableLayoutPanel{Dock=DockStyle.Fill,ColumnCount=1,RowCount=9,Padding=new Padding(16,8,16,6),Margin=Padding.Empty};
@@ -41,6 +43,8 @@ public sealed class MainForm : Form {
         header.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,100));header.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute,54));header.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute,54));
         header.Controls.Add(new Label{Text="Formula",Dock=DockStyle.Fill,TextAlign=ContentAlignment.MiddleLeft,Font=new Font("Segoe UI Semibold",19F),Margin=Padding.Empty},0,0);
         Setup(newFormula,"新建",delegate{NewFormula();});Setup(more,"更多",delegate{toolsMenu.Show(more,new Point(0,more.Height));});header.Controls.Add(newFormula,1,0);header.Controls.Add(more,2,0);
+        toolsMenu.Items.Add("设置…",null,delegate{ConfigureApplication();});
+        environmentMenu=toolsMenu.Items.Add("环境检查…",null,delegate{ShowEnvironment(this);});toolsMenu.Items.Add("缓存管理…",null,delegate{ShowCache(this);});toolsMenu.Items.Add(new ToolStripSeparator());
         toolsMenu.Items.Add("快捷输入设置…",null,delegate{ConfigureInput();});toolsMenu.Items.Add("恢复最近草稿…",null,delegate{RestoreDraft();});toolsMenu.Items.Add(new ToolStripSeparator());toolsMenu.Items.Add("批量统一公式样式…",null,delegate{BatchStyles();});
 
         var options=Row(3);
@@ -102,7 +106,7 @@ public sealed class MainForm : Form {
         status.Dock=DockStyle.Fill;status.ForeColor=Theme.Muted;status.Font=new Font("Microsoft YaHei UI",8F);status.TextAlign=ContentAlignment.MiddleLeft;status.AutoEllipsis=true;status.Margin=Padding.Empty;
         layout.Controls.Add(header,0,0);layout.Controls.Add(options,0,1);layout.Controls.Add(editor,0,3);layout.Controls.Add(preview,0,5);layout.Controls.Add(outputs,0,7);layout.Controls.Add(status,0,8);Controls.Add(layout);
         tips.SetToolTip(source,"空格展开缩写，Tab 跳转；Ctrl+Z 撤销，Ctrl+Y 重做。\nAlt+Shift+M/A/C 插入矩阵/对齐/分段；Ctrl+Enter 精确渲染。");
-        tips.SetToolTip(newFormula,"新建公式（Ctrl+N），保留当前字体和字号；旧内容进入最近草稿。");tips.SetToolTip(more,"快捷输入设置、最近草稿、批量统一公式样式。");
+        tips.SetToolTip(newFormula,"新建公式（Ctrl+N），保留当前字体和字号；旧内容进入最近草稿。");tips.SetToolTip(more,"设置、环境检查、缓存管理、最近草稿和批量样式。");
         tips.SetToolTip(edit,"在 Visio 中选中公式，再点击此处读回源码。");tips.SetToolTip(update,"把修改应用到读回的公式，保留中心位置和等比缩放。");
         tips.SetToolTip(grip,"精确结果就绪后，从预览区域直接拖入 Visio，源码随文档保存。");
         tips.SetToolTip(zoom,"仅改变预览大小，不改变导入字号。默认 150%；长公式自动缩小以完整显示。");
@@ -117,39 +121,39 @@ public sealed class MainForm : Form {
         quickTimer.Tick+=delegate{quickTimer.Stop();PaintQuick();};
         realtime.Started+=delegate(int revision){if(!closing){bool mathjax=Current().Font=="mathjax";SetBadge(mathjax?"生成中":"精确渲染中",false,false);SetStatus(mathjax?"正在生成 MathJax 矢量结果…":"本机 LaTeX 正在生成精确结果…");Toggle();}};
         realtime.Ready+=delegate(int revision,Rendered result){
-            if(closing)return;ready=result;quickTimer.Stop();PaintExact(result,revision);SetBadge(result.Formula.Font=="mathjax"?"原生结果":"精确结果",true,false);SetStatus("已就绪 · 源码将随 Visio 文档保存");Toggle();
+            if(closing)return;SetReady(result);quickTimer.Stop();PaintExact(result,revision);SetBadge(result.Formula.Font=="mathjax"?"原生结果":"精确结果",true,false);SetStatus(binding!=null&&preferences.AutoUpdate?(binding.Paused?binding.Reason:"精确结果就绪 · 自动更新 "+binding.Label):"已就绪 · 源码将随 Visio 文档保存");RefreshBindingUi();Toggle();
         };
         realtime.Failed+=delegate(int revision,Exception ex){
-            if(closing)return;ready=null;Log(ex);Script("vfExactError",revision);SetBadge("检查公式",false,true);SetStatus("渲染未通过："+ShortError(ex)+" · 修改后自动重试",true);Toggle();
+            if(closing)return;SetReady(null);Log(ex);Script("vfExactError",revision);SetBadge("检查公式",false,true);SetStatus("渲染未通过："+ShortError(ex)+" · 修改后自动重试",true);Toggle();
         };
         KeyPreview=true;KeyDown+=delegate(object s,KeyEventArgs e){if(e.Control&&e.KeyCode==Keys.Enter&&!busy){e.SuppressKeyPress=true;Schedule(true);}if(e.Control&&e.KeyCode==Keys.N&&!busy){e.SuppressKeyPress=true;NewFormula();}};
-        FormClosing+=delegate{SaveSettings();SaveDraft();closing=true;quickTimer.Stop();settingsTimer.Stop();draftTimer.Stop();realtime.Dispose();};
-        FormClosed+=delegate{quickTimer.Dispose();settingsTimer.Dispose();draftTimer.Dispose();toolsMenu.Dispose();tips.Dispose();Application.RemoveMessageFilter(dragFilter);if(bridge!=null)bridge.Dispose();};
+        FormClosing+=delegate{SaveSettings();SaveDraft();closing=true;lifetime.Cancel();syncTimer.Stop();maintenanceTimer.Stop();SetReady(null);quickTimer.Stop();settingsTimer.Stop();draftTimer.Stop();realtime.Dispose();};
+        FormClosed+=delegate{quickTimer.Dispose();settingsTimer.Dispose();draftTimer.Dispose();syncTimer.Dispose();maintenanceTimer.Dispose();toolsMenu.Dispose();tips.Dispose();Application.RemoveMessageFilter(dragFilter);if(bridge!=null)bridge.Dispose();};
         Load+=delegate{SetMinimumWindowSize();};DpiChanged+=delegate{SetMinimumWindowSize();QueueViewportSync();};
-        Shown+=delegate{picture.DocumentText=PreviewHtml.CreateShell();Schedule(false);source.Focus();};Toggle();ResumeLayout(true);
+        Shown+=delegate{picture.DocumentText=PreviewHtml.CreateShell();Schedule(false);source.Focus();StartMaintenance();};InitializeMaintenance();Toggle();ResumeLayout(true);
     }
     static TableLayoutPanel Row(int columns){var row=new TableLayoutPanel{Dock=DockStyle.Fill,ColumnCount=columns,RowCount=1,Margin=Padding.Empty};row.RowStyles.Add(new RowStyle(SizeType.Percent,100));return row;}
     int PreviewZoom(){return new[]{100,150,200,300,0}[Math.Max(0,zoom.SelectedIndex)];}
     void UpdateFontHint(){if(font.SelectedItem!=null)tips.SetToolTip(font,((MathFont)font.SelectedItem).Description+"\n其他字体的快速预览为近似字形，请以最终结果为准。");}
     void RememberSettings(){if(!closing){settingsTimer.Stop();settingsTimer.Start();}}
-    void SaveSettings(){try{settings.Save(new Preferences{Font=Current().Font,Size=(double)size.Value,Zoom=PreviewZoom()});SaveDraft();}catch(Exception ex){Log(ex);if(!closing)SetStatus("设置未能保存："+ShortError(ex),true);}}
+    void SaveSettings(){try{preferences.Font=Current().Font;preferences.Size=(double)size.Value;preferences.Zoom=PreviewZoom();settings.Save(preferences);SaveDraft();}catch(Exception ex){Log(ex);if(!closing)SetStatus("设置未能保存："+ShortError(ex),true);}}
     void RememberDraft(){if(!closing){draftTimer.Stop();draftTimer.Start();}}
     void CaptureDraft(){workspace.Capture(Current(),source.SelectionStart,source.SelectionLength);}
     void SaveDraft(){try{CaptureDraft();workspace.Save();}catch(Exception ex){Log(ex);if(!closing)SetStatus("草稿未能保存："+ShortError(ex),true);}}
     void ArchiveDraft(){CaptureDraft();workspace.Archive();}
-    void NewFormula(){if(busy)return;ArchiveDraft();target=null;loadedSize=0;source.LoadDocument("");SaveDraft();Schedule(false);source.Focus();}
-    void RestoreDraft(){if(busy)return;using(var dialog=new DraftDialog(workspace.Data.History))if(dialog.ShowDialog(this)==DialogResult.OK){Draft d=dialog.Chosen;ArchiveDraft();target=null;loadedSize=0;LoadFormula(d.Formula,d.Start,d.Length);SetStatus("已恢复草稿；插入新图形或重新选择 Visio 公式后更新。");}}
+    void NewFormula(){if(busy)return;ArchiveDraft();ClearTarget();source.LoadDocument("");SaveDraft();Schedule(false);source.Focus();}
+    void RestoreDraft(){if(busy)return;using(var dialog=new DraftDialog(workspace.Data.History))if(dialog.ShowDialog(this)==DialogResult.OK){Draft d=dialog.Chosen;ArchiveDraft();ClearTarget();LoadFormula(d.Formula,d.Start,d.Length);SetStatus("已恢复草稿；插入新图形或重新选择 Visio 公式后更新。");}}
     void LoadFormula(Formula f,int start=0,int length=0){applying=true;try{source.LoadDocument(f.Source,start,length);font.SelectedIndex=FontCatalog.IndexOf(f.Font);size.Value=(decimal)f.Size;}finally{applying=false;}SaveDraft();Schedule(false);RememberSettings();source.Focus();}
     void ConfigureInput(){if(busy)return;using(var dialog=new QuickSettingsDialog(workspace.Quick))if(dialog.ShowDialog(this)==DialogResult.OK)try{workspace.SaveQuick(dialog.Result);source.Configure(dialog.Result);SetStatus("快捷输入设置已保存");}catch(Exception ex){Error(ex);}}
     void BatchStyles(){if(busy)return;try{EnsureBridge();using(var dialog=new BatchDialog(Current(),whole=>bridge.Collect(whole).Count,RunBatch,()=>bridge.ContextName(),()=>bridge.ContextKey()))dialog.ShowDialog(this);}catch(Exception ex){Error(ex);}}
     async Task<int> RunBatch(BatchOptions options,Action<string> progress,CancellationToken token){
         if(options.ScopeKey!=null&&options.ScopeKey!=bridge.ContextKey())throw new Exception("当前 Visio 页面已改变，请重新打开批量样式窗口。");
         var targets=bridge.Collect(options.WholePage);if(targets.Count==0)throw new Exception("当前范围内没有本工具生成的公式。");
-        busy=true;Toggle();int committed=0;
+        busy=true;Toggle();int committed=0;var cache=new Dictionary<string,Rendered>();
         try{
             // Stop the editor's outstanding compile before batch work uses the same renderer/browser.
-            Task previous=realtime.LastTask;quickTimer.Stop();realtime.Request(new Formula{Source=""},0);if(previous!=null)await previous;ready=null;
-            var results=new List<Rendered>();var cache=new Dictionary<string,Rendered>();
+            Task previous=realtime.LastTask;quickTimer.Stop();realtime.Request(new Formula{Source=""},0);if(previous!=null)await previous;SetReady(null);
+            var results=new List<Rendered>();
             for(int i=0;i<targets.Count;i++){
                 token.ThrowIfCancellationRequested();Formula f=targets[i].Original.Clone();if(options.ChangeFont)f.Font=options.Font;if(options.ChangeSize)f.Size=options.Size;
                 string key=f.Font+"|"+f.Size.ToString(System.Globalization.CultureInfo.InvariantCulture)+"|"+f.Source;Rendered rendered;
@@ -157,12 +161,12 @@ public sealed class MainForm : Form {
                 if(!cache.TryGetValue(key,out rendered)){rendered=await RenderExactAsync(f,token);cache.Add(key,rendered);}results.Add(rendered);
             }
             token.ThrowIfCancellationRequested();if(options.ScopeKey!=null&&options.ScopeKey!=bridge.ContextKey())throw new Exception("准备期间切换了 Visio 页面，请重新打开批量样式窗口。");progress("正在统一写回 Visio…");bridge.ApplyBatch(targets,results,options.ChangeSize);committed=targets.Count;
-            if(target!=null)foreach(var item in targets)if(object.Equals((object)target,item.Shape)){target=null;loadedSize=0;break;}
+            if(target!=null)foreach(var item in targets)if(object.Equals((object)target,item.Shape)){ClearTarget();break;}
             return committed;
-        }finally{busy=false;Toggle();Schedule(false);if(committed>0)SetStatus("已统一 "+committed+" 个公式；Visio 中可一次撤销，请保存文档。");}
+        }finally{foreach(var rendered in cache.Values)rendered.Dispose();busy=false;Toggle();Schedule(false);if(committed>0)SetStatus("已统一 "+committed+" 个公式；Visio 中可一次撤销，请保存文档。");}
     }
     async Task<Rendered> RenderExactAsync(Formula formula,CancellationToken token){
-        if(formula.Font!="mathjax")return await Task.Run(()=>Renderer.Render(formula,token),token);
+        if(formula.Font!="mathjax")return await Task.Run(()=>Renderer.Render(formula,token,preferences.TexDirectory),token);
         Renderer.Validate(formula);var wait=System.Diagnostics.Stopwatch.StartNew();
         while(!browserReady){token.ThrowIfCancellationRequested();if(wait.ElapsedMilliseconds>15000)throw new Exception("MathJax 尚未启动，请重新打开工具。");await Task.Delay(25,token);}
         Dictionary<string,object> exported;
@@ -184,7 +188,7 @@ public sealed class MainForm : Form {
     void SetBadge(string text,bool exact,bool error){badge.Text=text;badge.ForeColor=error?Theme.Error:exact?Theme.Accent:Theme.Muted;badge.BackColor=error?Color.FromArgb(252,237,232):exact?Theme.SoftAccent:Theme.Background;badge.Invalidate();}
     Formula Current(){return new Formula{Source=source.Text,Font=((MathFont)font.SelectedItem).Id,Size=(double)size.Value};}
     void Schedule(bool immediate){
-        if(closing)return;ready=null;Formula f=Current();bool empty=string.IsNullOrWhiteSpace(f.Source);
+        if(closing)return;editClock.Restart();SetReady(null);Formula f=Current();bool empty=string.IsNullOrWhiteSpace(f.Source);
         SetStatus(empty?"输入 LaTeX 公式，即可自动预览":"输入中 · 停顿后自动生成精确结果");SetBadge(empty?"自动预览":"快速预览",false,false);
         int revision=realtime.Request(f,immediate?0:RealtimeController.DelayFor(f),immediate);Script(empty?"vfClear":"vfSetRevision",revision);
         // Throttle rather than debounce: previews continue during sustained typing.
@@ -210,14 +214,20 @@ public sealed class MainForm : Form {
     static string ShortError(Exception ex){foreach(string line in ex.Message.Split('\n'))if(line.TrimStart().StartsWith("!"))return line.Trim().TrimStart('!').Trim();return ex.Message.Length>120?ex.Message.Substring(0,120):ex.Message;}
     void Error(Exception ex){SetStatus("操作未完成："+ShortError(ex),true);Log(ex);}
     void ReadSelected(){
-        try{EnsureBridge();dynamic picked=bridge.Selected();Formula f=Bridge.Read(picked);FontCatalog.Get(f.Font);Renderer.Validate(f);ArchiveDraft();target=picked;loadedSize=f.Size;
+        try{EnsureBridge();dynamic picked=bridge.Selected();Formula f=Bridge.Read(picked);FontCatalog.Get(f.Font);Renderer.Validate(f);ArchiveDraft();target=picked;loadedSize=f.Size;binding=new UpdateBinding((object)picked);RefreshBindingUi();
             LoadFormula(f);
-        }catch(Exception ex){Error(ex);}
+        }catch(Exception ex){if(binding!=null&&preferences.AutoUpdate){binding.Pause("未能读回新目标，自动更新已暂停；请重新选择公式。");RefreshBindingUi();}Error(ex);}
     }
-    void UpdateSelected(){
-        if(target==null||busy||ready==null)return;busy=true;Toggle();
-        try{EnsureBridge();bridge.Update(target,ready,Math.Abs(ready.Formula.Size-loadedSize)>0.0001);loadedSize=ready.Formula.Size;SetStatus("已原位更新 · 请在 Visio 中保存文档");}
-        catch(Exception ex){Error(ex);}finally{busy=false;Toggle();}
+    void UpdateSelected(){ApplyUpdate(false);}
+    void ApplyUpdate(bool automatic){
+        if(target==null||busy||ready==null)return;
+        if(binding!=null&&binding.Check()==2){string reason=binding.Reason;ClearTarget();SetStatus(reason,true);return;}
+        if(automatic&&(binding==null||binding.Paused||!binding.NeedsUpdate(ready.Formula)))return;
+        busy=true;Toggle();
+        try{EnsureBridge();using(ready.Pin())bridge.Update(target,ready,Math.Abs(ready.Formula.Size-loadedSize)>0.0001);loadedSize=ready.Formula.Size;
+            if(binding==null)binding=new UpdateBinding((object)target);else binding.Refresh();
+            SetStatus((automatic?"已自动更新 · ":"已原位更新 · ")+binding.Label+"；请在 Visio 中保存文档");
+        }catch(Exception ex){if(automatic&&binding!=null)binding.Pause("自动更新已暂停："+ShortError(ex)+"；可重新读回或手动更新。");Error(ex);}finally{busy=false;RefreshBindingUi();Toggle();}
     }
 }
 static class Program {

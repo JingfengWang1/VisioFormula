@@ -32,4 +32,5 @@ tex-bin.txt
 *.p12
 *.key
 .DS_Store
-Thumbs.db/LatencyBenchmark.exe.config
+Thumbs.db
+/LatencyBenchmark.exe.config

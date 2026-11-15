@@ -50,6 +50,7 @@ public static class IntegrationTests {
             string cache=Path.GetFullPath(Renderer.Cache)+Path.DirectorySeparatorChar;
             string generated=Path.GetFullPath(first.Directory);
             if(!generated.StartsWith(cache,StringComparison.OrdinalIgnoreCase)) throw new Exception("Unsafe test cache path");
+            bridge.Dispose();first.Dispose();bridge=new Bridge((object)ownedApp);
             Directory.Delete(generated,true);
             doc=bridge.App.Documents.Open(initial); page=doc.Pages[1]; original=page.Shapes.ItemFromID[id];
             Formula recovered=Bridge.Read(original);
