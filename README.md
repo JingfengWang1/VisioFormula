@@ -6,7 +6,7 @@ Visio Formula 是一款面向 Windows 桌面 Visio 的公式工具：使用 TeX 
 
 目前提供 **7 种数学字体**：Latin Modern、Times / NewTX、STIX Two、Palatino / NewPX、Libertinus、Sans / NewTXsf 和 MathJax / TeX。公式源码、字体和字号随 Visio 文档保存，重开文档后可读回编辑、原位更新。
 
-当前功能版本：**0.9.0**。所有公式渲染均在本机进行。
+当前功能版本：**0.9.1**。所有公式渲染均在本机进行。
 
 **后续 AI 或开发者请先阅读 [项目交接与实现说明](docs/AI_HANDOFF.md)，再阅读 [验证记录](docs/VALIDATION.md)。**
 
@@ -67,13 +67,13 @@ Visio Formula 是一款面向 Windows 桌面 Visio 的公式工具：使用 TeX 
 2. 拖动预览中的公式到 Visio，或点击“复制到 Visio”后粘贴。
 3. 要修改已有公式，先在 Visio 中选中完整的公式组，再点击工具中的“编辑选中公式”。
 4. 修改完成后点击“原位更新”，并保存 Visio 文档。
-5. “更多”中可配置快捷输入、恢复最近草稿、批量统一公式样式。
+5. “更多”只保留设置、恢复最近草稿和批量统一公式样式；快捷输入、环境检查、缓存管理统一从设置进入。
 
 输入 `al` 后按空格展开为 `\alpha`；`sq` 展开为 `\sqrt{}` 并进入参数。Tab / Shift+Tab 在占位位置间移动。Ctrl+Z 撤销，Ctrl+Y / Ctrl+Shift+Z 重做，Ctrl+N 新建，Ctrl+Enter 强制精确重编。
 
 ## LaTeX 工具查找
 
-优先使用“更多 → 环境检查”中手动选择并保存的路径；未指定时依次查找程序旁的 `tex-bin.txt`、系统 `PATH`、固定磁盘根目录下的 TeX Live 版本目录，以及常见 MiKTeX 安装目录。
+优先使用“更多 → 设置 → 环境检查”中手动选择并保存的路径；未指定时依次查找程序旁的 `tex-bin.txt`、系统 `PATH`、固定磁盘根目录下的 TeX Live 版本目录，以及常见 MiKTeX 安装目录。
 
 非标准安装路径可在程序旁创建 `tex-bin.txt`，只填工具所在目录，例如：
 
@@ -81,7 +81,7 @@ Visio Formula 是一款面向 Windows 桌面 Visio 的公式工具：使用 TeX 
 E:\TeXLive\2026\bin\windows
 ```
 
-此文件是本机配置，Git 默认忽略。程序不会自动安装 TeX 或宏包。新电脑可先打开“更多 → 环境检查”，再点击“测试渲染”逐项确认字体可用。
+此文件是本机配置，Git 默认忽略。程序不会自动安装 TeX 或宏包。新电脑可先打开“更多 → 设置 → 环境检查”，再点击“测试渲染”逐项确认字体可用。
 
 ## 草稿和设置
 

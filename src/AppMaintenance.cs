@@ -8,7 +8,7 @@ using System.Windows.Forms;
 
 namespace VisioFormula {
 public sealed partial class MainForm {
-    Preferences preferences;UpdateBinding binding;IDisposable readyPin;ToolStripItem environmentMenu;
+    Preferences preferences;UpdateBinding binding;IDisposable readyPin;ToolStripItem settingsMenu;
     readonly Stopwatch editClock=Stopwatch.StartNew(),bindingClock=Stopwatch.StartNew();
     readonly System.Windows.Forms.Timer syncTimer=new System.Windows.Forms.Timer{Interval=100};
     readonly System.Windows.Forms.Timer maintenanceTimer=new System.Windows.Forms.Timer{Interval=60000};
@@ -30,10 +30,10 @@ public sealed partial class MainForm {
     async void StartupCheck(){
         try{
             if(!preferences.EnvironmentChecked){var visio=EnvironmentInspector.Visio();var rows=await Task.Run(()=>EnvironmentInspector.Basic(preferences.TexDirectory,settings.FilePath,CacheStore.Default,Path.Combine(AppDomain.CurrentDomain.BaseDirectory,"assets"),lifetime.Token));
-                if(closing)return;bool issue=visio.Problem||rows.Any(r=>r.Problem);environmentMenu.Text=issue?"环境检查（需处理）…":"环境检查…";preferences.EnvironmentChecked=true;SaveSettings();if(issue)SetStatus("部分环境未就绪，可在“更多 → 环境检查”查看。",true);
+                if(closing)return;bool issue=visio.Problem||rows.Any(r=>r.Problem);settingsMenu.Text=issue?"设置（环境需检查）…":"设置…";preferences.EnvironmentChecked=true;SaveSettings();if(issue)SetStatus("部分环境未就绪，可在“更多 → 设置 → 环境检查”查看。",true);
             }
             await Task.Delay(1800,lifetime.Token);await CleanIdle();
-        }catch(OperationCanceledException){}catch(Exception e){if(!closing){Log(e);environmentMenu.Text="环境检查（需处理）…";}}
+        }catch(OperationCanceledException){}catch(Exception e){if(!closing){Log(e);settingsMenu.Text="设置（环境需检查）…";}}
     }
     async Task CleanIdle(){
         if(closing||busy||maintenanceDepth>0||cleaning||!preferences.AutoClean||editClock.ElapsedMilliseconds<1500)return;
@@ -46,7 +46,7 @@ public sealed partial class MainForm {
     void ShowCache(IWin32Window owner){if(busy)return;maintenanceDepth++;try{using(var dialog=new CacheDialog(CacheStore.Default,preferences))if(dialog.ShowDialog(owner)==DialogResult.OK){preferences.AutoClean=dialog.AutoClean;preferences.CacheLimitMB=dialog.LimitMB;preferences.CacheDays=dialog.Days;SaveSettings();}}finally{maintenanceDepth--;}}
     async void ShowEnvironment(IWin32Window owner){if(busy)return;maintenanceDepth++;busy=true;Toggle();try{
         Task previous=realtime.LastTask;quickTimer.Stop();realtime.Request(new Formula{Source=""},0);if(previous!=null)await previous;if(closing)return;SetReady(null);
-        using(var dialog=new EnvironmentDialog(preferences.TexDirectory,settings.FilePath,token=>RenderExactAsync(new Formula{Font="mathjax",Source=@"\text{test}\quad\bm{\alpha}=\frac{1}{s+1}\quad\color{blue}\begin{bmatrix}1&0\\0&1\end{bmatrix}"},token))){dialog.ShowDialog(owner);if(dialog.PathChanged){preferences.TexDirectory=dialog.TexDirectory;Toolchain.Refresh();realtime.ClearCache();}preferences.EnvironmentChecked=true;SaveSettings();environmentMenu.Text="环境检查…";}
+        using(var dialog=new EnvironmentDialog(preferences.TexDirectory,settings.FilePath,token=>RenderExactAsync(new Formula{Font="mathjax",Source=@"\text{test}\quad\bm{\alpha}=\frac{1}{s+1}\quad\color{blue}\begin{bmatrix}1&0\\0&1\end{bmatrix}"},token))){dialog.ShowDialog(owner);if(dialog.PathChanged){preferences.TexDirectory=dialog.TexDirectory;Toolchain.Refresh();realtime.ClearCache();}preferences.EnvironmentChecked=true;SaveSettings();settingsMenu.Text="设置…";}
     }catch(Exception e){Error(e);}finally{maintenanceDepth--;busy=false;if(!closing){Toggle();Schedule(false);}}}
 }
 }

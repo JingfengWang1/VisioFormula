@@ -9,8 +9,8 @@ using System.Collections.Generic;
 using System.Windows.Forms;
 
 [assembly:TargetFramework(".NETFramework,Version=v4.8")]
-[assembly:System.Reflection.AssemblyVersion("0.9.0.0")]
-[assembly:System.Reflection.AssemblyFileVersion("0.9.0.0")]
+[assembly:System.Reflection.AssemblyVersion("0.9.1.0")]
+[assembly:System.Reflection.AssemblyFileVersion("0.9.1.0")]
 namespace VisioFormula {
 public sealed partial class MainForm : Form {
     FormulaEditor source=new FormulaEditor(); ComboBox font=new FontChoice(); NumericUpDown size=new NumericUpDown();
@@ -34,7 +34,7 @@ public sealed partial class MainForm : Form {
         SuspendLayout();
         AutoScaleDimensions=new SizeF(96,96);AutoScaleMode=AutoScaleMode.Dpi;
         Font=new Font("Microsoft YaHei UI",9F);ForeColor=Theme.Ink;BackColor=Theme.Background;
-        Text="Visio Formula 0.9.0";ClientSize=new Size(432,590);MinimumSize=new Size(360,460);
+        Text="Visio Formula 0.9.1";ClientSize=new Size(432,590);MinimumSize=new Size(360,460);
         StartPosition=FormStartPosition.Manual;Location=new Point(30,60);DoubleBuffered=true;
         string iconPath=Path.Combine(AppDomain.CurrentDomain.BaseDirectory,"assets","formula.ico");if(File.Exists(iconPath))Icon=new Icon(iconPath);
         var layout=new TableLayoutPanel{Dock=DockStyle.Fill,ColumnCount=1,RowCount=9,Padding=new Padding(16,8,16,6),Margin=Padding.Empty};
@@ -43,9 +43,8 @@ public sealed partial class MainForm : Form {
         header.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,100));header.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute,54));header.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute,54));
         header.Controls.Add(new Label{Text="Formula",Dock=DockStyle.Fill,TextAlign=ContentAlignment.MiddleLeft,Font=new Font("Segoe UI Semibold",19F),Margin=Padding.Empty},0,0);
         Setup(newFormula,"新建",delegate{NewFormula();});Setup(more,"更多",delegate{toolsMenu.Show(more,new Point(0,more.Height));});header.Controls.Add(newFormula,1,0);header.Controls.Add(more,2,0);
-        toolsMenu.Items.Add("设置…",null,delegate{ConfigureApplication();});
-        environmentMenu=toolsMenu.Items.Add("环境检查…",null,delegate{ShowEnvironment(this);});toolsMenu.Items.Add("缓存管理…",null,delegate{ShowCache(this);});toolsMenu.Items.Add(new ToolStripSeparator());
-        toolsMenu.Items.Add("快捷输入设置…",null,delegate{ConfigureInput();});toolsMenu.Items.Add("恢复最近草稿…",null,delegate{RestoreDraft();});toolsMenu.Items.Add(new ToolStripSeparator());toolsMenu.Items.Add("批量统一公式样式…",null,delegate{BatchStyles();});
+        settingsMenu=toolsMenu.Items.Add("设置…",null,delegate{ConfigureApplication();});toolsMenu.Items.Add(new ToolStripSeparator());
+        toolsMenu.Items.Add("恢复最近草稿…",null,delegate{RestoreDraft();});toolsMenu.Items.Add("批量统一公式样式…",null,delegate{BatchStyles();});
 
         var options=Row(3);
         options.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,100));options.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute,10));options.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute,112));
@@ -106,7 +105,7 @@ public sealed partial class MainForm : Form {
         status.Dock=DockStyle.Fill;status.ForeColor=Theme.Muted;status.Font=new Font("Microsoft YaHei UI",8F);status.TextAlign=ContentAlignment.MiddleLeft;status.AutoEllipsis=true;status.Margin=Padding.Empty;
         layout.Controls.Add(header,0,0);layout.Controls.Add(options,0,1);layout.Controls.Add(editor,0,3);layout.Controls.Add(preview,0,5);layout.Controls.Add(outputs,0,7);layout.Controls.Add(status,0,8);Controls.Add(layout);
         tips.SetToolTip(source,"空格展开缩写，Tab 跳转；Ctrl+Z 撤销，Ctrl+Y 重做。\nAlt+Shift+M/A/C 插入矩阵/对齐/分段；Ctrl+Enter 精确渲染。");
-        tips.SetToolTip(newFormula,"新建公式（Ctrl+N），保留当前字体和字号；旧内容进入最近草稿。");tips.SetToolTip(more,"设置、环境检查、缓存管理、最近草稿和批量样式。");
+        tips.SetToolTip(newFormula,"新建公式（Ctrl+N），保留当前字体和字号；旧内容进入最近草稿。");tips.SetToolTip(more,"设置、最近草稿和批量样式。");
         tips.SetToolTip(edit,"在 Visio 中选中公式，再点击此处读回源码。");tips.SetToolTip(update,"把修改应用到读回的公式，保留中心位置和等比缩放。");
         tips.SetToolTip(grip,"精确结果就绪后，从预览区域直接拖入 Visio，源码随文档保存。");
         tips.SetToolTip(zoom,"仅改变预览大小，不改变导入字号。默认 150%；长公式自动缩小以完整显示。");
@@ -144,7 +143,6 @@ public sealed partial class MainForm : Form {
     void NewFormula(){if(busy)return;ArchiveDraft();ClearTarget();source.LoadDocument("");SaveDraft();Schedule(false);source.Focus();}
     void RestoreDraft(){if(busy)return;using(var dialog=new DraftDialog(workspace.Data.History))if(dialog.ShowDialog(this)==DialogResult.OK){Draft d=dialog.Chosen;ArchiveDraft();ClearTarget();LoadFormula(d.Formula,d.Start,d.Length);SetStatus("已恢复草稿；插入新图形或重新选择 Visio 公式后更新。");}}
     void LoadFormula(Formula f,int start=0,int length=0){applying=true;try{source.LoadDocument(f.Source,start,length);font.SelectedIndex=FontCatalog.IndexOf(f.Font);size.Value=(decimal)f.Size;}finally{applying=false;}SaveDraft();Schedule(false);RememberSettings();source.Focus();}
-    void ConfigureInput(){if(busy)return;using(var dialog=new QuickSettingsDialog(workspace.Quick))if(dialog.ShowDialog(this)==DialogResult.OK)try{workspace.SaveQuick(dialog.Result);source.Configure(dialog.Result);SetStatus("快捷输入设置已保存");}catch(Exception ex){Error(ex);}}
     void BatchStyles(){if(busy)return;try{EnsureBridge();using(var dialog=new BatchDialog(Current(),whole=>bridge.Collect(whole).Count,RunBatch,()=>bridge.ContextName(),()=>bridge.ContextKey()))dialog.ShowDialog(this);}catch(Exception ex){Error(ex);}}
     async Task<int> RunBatch(BatchOptions options,Action<string> progress,CancellationToken token){
         if(options.ScopeKey!=null&&options.ScopeKey!=bridge.ContextKey())throw new Exception("当前 Visio 页面已改变，请重新打开批量样式窗口。");

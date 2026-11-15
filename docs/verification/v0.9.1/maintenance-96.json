@@ -1,0 +1,1 @@
+{"passed":["Main window has no auto-update checkbox","Auto-update defaults to off inside settings","Settings save returns the enabled preference","Settings cancellation leaves caller preference unchanged","Cache dialog exposes 20 MB / 7 day defaults","Manual cleanup reports actual released space","Environment dialog reports tools, resources, storage and seven fonts"]}
