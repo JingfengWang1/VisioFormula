@@ -1,36 +1,68 @@
 # 验证记录与运行方法
 
-当前版本 **0.9.1**，验证日期 **2026-11-15（Asia/Shanghai）**。
+当前技术原型 **0.10.0-preview.1**，验证日期 **2026-11-17（Asia/Shanghai）**。稳定版本仍为 0.9.1。
 
-本版调整设置入口：更多菜单只保留设置、恢复最近草稿、批量统一公式样式；快捷输入、环境检查、缓存管理统一从设置进入。首次环境诊断的提示和文档同步指向新入口。渲染、自动更新与缓存清理算法没有改动。
+本轮按用户要求未使用 computer use。通过代码、WinForms 控件及 Office COM 接口检查 **357 项**；PowerPoint 实际鼠标拖放、Ctrl+Z/Ctrl+Y 和视觉验收仍由用户执行，不能据此宣布核心人工验收已经通过。
 
-## 本轮结果
-
-**83 项检查通过**，使用隔离设置与缓存。
+## 当前自动检查
 
 | 检查 | 通过数 | 证据 |
 | --- | --- | --- |
-| 主题窗口与实际主窗口菜单，96 DPI | 19 | [ui-96](verification/v0.9.1/ui-96.json) |
-| 主题窗口与实际主窗口菜单，168 DPI | 19 | [ui-168](verification/v0.9.1/ui-168.json) |
-| 环境、缓存、设置保存/取消、首次诊断与空闲清理 | 38 | [maintenance](verification/v0.9.1/maintenance.json) |
-| 新窗口 96 DPI 布局与交互 | 7 | [maintenance-96](verification/v0.9.1/maintenance-96.json) |
+| 编辑器、快捷输入、撤销和草稿 | 102 | [editor](verification/v0.10.0-preview.1/editor.json) |
+| 主题与菜单，96 / 168 DPI | 19 + 19 | [96](verification/v0.10.0-preview.1/ui-96.json)、[168](verification/v0.10.0-preview.1/ui-168.json) |
+| 快速/精确预览、取消和会话缓存 | 50 | [realtime](verification/v0.10.0-preview.1/realtime.json) |
+| Visio 原生传输、保存重开、原位更新和撤销/重做 | 28 | [integration](verification/v0.10.0-preview.1/integration.json) |
+| Visio 批量样式、事务和撤销 | 23 | [batch](verification/v0.10.0-preview.1/batch.json) |
+| 环境、缓存与设置窗口 | 38 + 7 | [maintenance](verification/v0.10.0-preview.1/maintenance.json)、[96](verification/v0.10.0-preview.1/maintenance-96.json) |
+| Visio 自动更新与目标归属 | 24 | [auto-update](verification/v0.10.0-preview.1/auto-update.json) |
+| PowerPoint 新目的端、元数据、原生复制与保存/更新接口 | 47 | [powerpoint](verification/v0.10.0-preview.1/powerpoint.json) |
 
-菜单检查改为读取实际 MainForm 的菜单，避免测试中另造一个过时的菜单。已查看实际控件生成的“更多”菜单和设置窗口截图，确认三个菜单入口与设置内三个子入口的位置和文字。环境检查实际渲染全部七种字体。
+测试使用隔离配置和缓存。Office 操作仅针对自建测试文档；PowerPoint 数据测试使用隐藏演示文稿，没有通过鼠标、键盘或 computer use 操作桌面。原生复制检查会使用系统剪贴板。
 
-运行命令：
+PowerPoint 接口检查覆盖：
+
+- 目的端切换解除旧目标、保留输入；偏好持久化；PowerPoint 不创建自动更新绑定且禁用批量入口，切回 Visio 恢复功能。
+- 大小写安全编码、长 Unicode 源码分块、校验和损坏拒绝。
+- 三次获取真实原生拖放数据提供器，并通过原生粘贴确认源码仍在；暂存文档关闭恢复、复制后关闭暂存仍可粘贴。
+- 七种字体的实际 SVG 嵌入与保存重开；MathJax 来自实际离线预览引擎。
+- `.pptx` 内包含 SVG media、svgBlip 引用和图形标签；没有对本机缓存的外部关系。
+- 清理缓存后重开仍可读回；更新保留 Shape ID、中心、角度、缩放和层级，基本动画对象仍指向原 Shape ID。
+- 显式字号变化、非等比拉伸拒绝、无效 SVG 写入前拒绝、再次保存重开、目标删除保护。
+
+新增测试曾因测试宿主仅循环 DoEvents，导致异步浏览器 COM 调用线程不正确。已改用与正式程序相同的 STA + WinForms Application.Run；未因此更改生产渲染逻辑或放宽断言。最后成功的 PowerPoint 报告独立保存。
+
+## 等待用户验收
+
+[PowerPoint 验证清单](POWERPOINT_CHECKLIST.md) 的 P1–P7 是核心验收：直接拖入、连续拖入、保存重开读回、原位更新、一次撤销、重做、再次保存。
+
+目前未执行这些物理鼠标/键盘步骤。PowerPoint 的一次撤销分组、真实播放和跨窗口体验必须由用户确认；API 获得 IDataObject 或粘贴成功，不等同于实际拖放通过。异常发生在更新中途时的恢复分支尚未完成故障注入验证。
+
+未覆盖：组合内公式、多个独立 PowerPoint 进程、PowerPoint 网页版/macOS、实际 MiKTeX 环境、不同 DPI 显示器间的真实拖动。本轮没有重跑需要实际前台切换的 Visio 连接测试。
+
+PowerPoint 自动更新和批量样式按约定留到验收后再开发。当前实测 Office 16.0 桌面接口与 TeX Live；所有历史结果与本轮结果分开记录。
+
+## 运行方法
 
 ```powershell
 .\build.ps1
+.\test-powerpoint.ps1
+.\test-editor.ps1
 .\test-theme.ps1
-.\test-maintenance.ps1 -WithoutVisio
+.\test-realtime.ps1
+.\run-tests.ps1
+.\test-batch.ps1
+.\test-maintenance.ps1
 ```
 
-0.9.0 的 336 项检查单独保留在 [历史验证记录](VALIDATION-0.9.0.md)，不能计入本轮。此次改动未涉及 Visio 传输/更新实现，没有重复完整 Visio 文档集成测试；实际鼠标跨窗口拖放、实际 MiKTeX 安装和跨显示器 DPI 移动仍不属于本轮覆盖范围。
+PowerPoint 测试脚本需要本机桌面 PowerPoint 和当前七字体所需的 TeX 宏包。默认新建并清理自己拥有的演示文稿；不得改为在用户现有文档上运行写入测试。
 
+## 历史记录
+
+- [0.9.1](VALIDATION-0.9.1.md)
+- [0.9.0](VALIDATION-0.9.0.md)
+- [0.8.2](VALIDATION-0.8.2.md)
 ## 发布包核验
 
-免安装包包含程序、config、完整离线 assets、使用说明和 SHA256SUMS.txt，共 12 个文件；程序版本为 0.9.1.0。已比对发布文件与测试构建，并对 ZIP 每个文件重新计算 SHA-256，全部一致。
+包内包含程序、config、完整离线资源、使用说明、PowerPoint 验证清单和 SHA256SUMS.txt，共 13 个文件。已逐文件核对已测构建与 ZIP 内容，程序文件版本 0.10.0.0。
 
-ZIP SHA-256：`86b3ab8ebf84da0db1f58deddd059b7b3ad3674e70521a4b3cf4c54f5d0d2045`。
-
-构建、其他回归脚本和交互验证方法见 [开发交接说明](AI_HANDOFF.md) 与 [0.9.0 验证记录](VALIDATION-0.9.0.md)。个人配置、测试绘图、日志和截图不进入公开仓库或发布包。
+ZIP SHA-256：`6ecd077fca34e02a9c2bc1436ce0bf77ea7051e8a750087ef13d7ac1ddb3c450`。

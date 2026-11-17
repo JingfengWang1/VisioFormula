@@ -1,6 +1,6 @@
 # 项目开发约定
 
-先阅读 `docs/AI_HANDOFF.md` 与 `docs/VALIDATION.md`。当前功能基线为 0.9.1。
+先阅读 `docs/AI_HANDOFF.md` 与 `docs/VALIDATION.md`。当前开发基线为 0.10.0-preview.1（PowerPoint 技术原型），稳定发布为 0.9.1。
 
 ## 开发入口
 
@@ -19,6 +19,9 @@
 - 缓存默认 20 MB / 7 天；保持跨进程租约、路径与白名单检查，保护预览/LRU/暂存/批量结果。
 - 测试必须设置 VISIOFORMULA_CACHE 到隔离目录；Rendered 的所有者和 Pin 的使用者分别负责释放。
 - 新输入立即使旧导出失效；取消和 revision 检查必须阻止旧结果覆盖新源码。
+- PowerPoint 原型通过 IFormulaHost 独立接入；保留 Visio Bridge 的协议和行为。目标切换必须清除旧关联。
+- PowerPoint 自动更新和批量样式必须等用户核心验收后再启用；当前仅支持独立公式与手动更新。
+- 不要把 PowerPoint 原生私有剪贴板格式按字节复制为新 DataObject：其中包含活动令牌，必须保留 Office 原生数据提供器。
 - 拖放使用 Visio 原生 IDataObject；保留 PreviewDragFilter 的浏览器鼠标消息拦截。
 - 每次读取当前选中范围刷新活动 Visio 实例；更新和撤销属于目标形状的 Application。
 - 稳定字体 ID、公式元数据 Version=1、BaseWidth/BaseHeight、User.VF* 单元格需要兼容已有文档。
@@ -27,6 +30,8 @@
 
 ## 验证与文件边界
 
+- 按本轮用户要求，不使用 computer use 验证原型；只做代码/COM 接口检查，实际鼠标拖放与 PowerPoint 撤销/重做交给用户，清单位于 docs/POWERPOINT_CHECKLIST.md。
+- 每次本机发布后更新桌面“Visio Formula”快捷方式并清理确认属于本项目的旧快捷方式；不删除用户配置或 Microsoft Visio 的快捷方式。
 - 使用独立设置路径测试，禁止覆盖真实用户的草稿或自定义快捷输入。
 - Visio 测试必须创建并明确绑定自己拥有的实例和文档；finally 清理自己创建的对象。
 - 不关闭、保存、改写用户现有绘图来代替回归测试；只有任务明确要求时才操作那些文档。

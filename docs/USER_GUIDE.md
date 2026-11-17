@@ -1,4 +1,4 @@
-# Visio Formula 0.9.1 使用说明
+# Visio Formula 0.10.0-preview.1 使用说明
 
 将 TeX 公式以矢量图直接拖入 Visio，支持七种数学字体。
 
@@ -7,6 +7,14 @@
 解压整个文件夹，运行 `VisioFormula.exe`。保留旁边的 `VisioFormula.exe.config` 和完整 `assets` 文件夹。运行环境为 Windows x64、.NET Framework 4.8 和桌面版 Visio；本机 TeX 字体还需要 LaTeX 与 dvisvgm。
 
 从旧版升级时先正常关闭旧程序，再启动新版。字体、字号、快捷输入和草稿继续从 `%LOCALAPPDATA%\VisioFormula` 读取，不需要手动复制到程序目录。新缓存也位于此用户目录下，不进入同步的程序文件夹。
+
+## PowerPoint 原型
+
+在主窗口顶部选择 PowerPoint，再拖动或复制精确结果到幻灯片。选中独立公式后，点“编辑选中公式”，修改源码并等待精确结果，点“原位更新”。使用步骤和待验收项目见 [PowerPoint 验证清单](https://github.com/JingfengWang1/VisioFormula/blob/main/docs/POWERPOINT_CHECKLIST.md)。
+
+PowerPoint 原型拖放会占用系统剪贴板；自动更新、批量样式和组合内公式暂不支持。切回 Visio 后，原有功能继续可用。目标选择会被记住；切换目标会解除旧公式关联。
+
+下文的自动原位更新与批量样式仍指 Visio 功能。
 
 ## 菜单与设置
 

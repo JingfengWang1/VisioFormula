@@ -6,7 +6,9 @@ Visio Formula 是一款面向 Windows 桌面 Visio 的公式工具：使用 TeX 
 
 目前提供 **7 种数学字体**：Latin Modern、Times / NewTX、STIX Two、Palatino / NewPX、Libertinus、Sans / NewTXsf 和 MathJax / TeX。公式源码、字体和字号随 Visio 文档保存，重开文档后可读回编辑、原位更新。
 
-当前功能版本：**0.9.1**。所有公式渲染均在本机进行。
+稳定版本：**0.9.1**。当前技术原型：**0.10.0-preview.1**，新增 Windows 桌面 PowerPoint 支持，等待用户手工验收。所有公式渲染均在本机进行。
+
+[下载 PowerPoint 原型](https://github.com/JingfengWang1/VisioFormula/releases/tag/v0.10.0-preview.1) · [PowerPoint 验证清单](docs/POWERPOINT_CHECKLIST.md)
 
 **后续 AI 或开发者请先阅读 [项目交接与实现说明](docs/AI_HANDOFF.md)，再阅读 [验证记录](docs/VALIDATION.md)。**
 
@@ -25,6 +27,12 @@ Visio Formula 是一款面向 Windows 桌面 Visio 的公式工具：使用 TeX 
 - 环境检查：识别 Visio / TeX 路径，实际测试七种字体，提供手动路径选择和可复制的诊断信息。
 - 缓存管理：默认自动清理，容量目标 20 MB、保留 7 天，保护其他窗口正在使用的结果。
 - 紧凑的上下布局、统一的设置和菜单样式、DPI 适配、预览缩放与完整适配。
+
+## PowerPoint 技术原型
+
+顶部选择 PowerPoint 后，可直接拖入或复制公式、把源码和字体字号随 `.pptx` 保存、读回编辑并手动原位更新。现有七种字体、预览、快捷输入、草稿和缓存继续共用；Visio 功能保留。
+
+PowerPoint 拖放当前借助原生复制通路，会将公式放入剪贴板。原型仅支持独立公式图形；PowerPoint 自动更新和批量样式暂不启用。真实鼠标拖放和 Ctrl+Z/Ctrl+Y 由用户按 [验证清单](docs/POWERPOINT_CHECKLIST.md) 验收，不能把接口检查写成这些操作已经通过。
 
 ## 运行条件
 
@@ -61,7 +69,7 @@ Visio Formula 是一款面向 Windows 桌面 Visio 的公式工具：使用 TeX 
 
 分发时复制整个输出文件夹，至少保留 `VisioFormula.exe`、`VisioFormula.exe.config` 和完整 `assets` 目录。
 
-## 基本操作
+## 基本操作（Visio）
 
 1. 输入数学公式主体，等待预览；本机 LaTeX 字体会先显示近似预览，再切换为精确结果。
 2. 拖动预览中的公式到 Visio，或点击“复制到 Visio”后粘贴。
@@ -97,7 +105,7 @@ E:\TeXLive\2026\bin\windows
 
 复制程序文件夹即可迁移程序；要迁移个人设置和草稿，需要另外复制上述用户配置目录。图中公式源码随 `.vsdx` 保存。
 
-详细步骤见 [0.9 使用说明](docs/USER_GUIDE.md)。
+详细步骤见 [使用说明](docs/USER_GUIDE.md)。
 
 ## 0.9 新功能的使用
 

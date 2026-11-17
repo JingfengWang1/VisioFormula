@@ -58,6 +58,12 @@ public static class EnvironmentInspector {
             return new CheckResult("Visio",window==null?"已连接，未打开绘图":"已连接",window==null?"请打开一个绘图文档。":"版本 "+(string)app.Version+" · "+(string)window.Document.Name);
         }catch(Exception e){return new CheckResult("Visio","连接失败","请让两个程序以相同用户权限运行并重新打开绘图。 "+Short(e),true);}
     }
+    public static CheckResult PowerPoint(){
+        try{if(Type.GetTypeFromProgID("PowerPoint.Application")==null)return new CheckResult("PowerPoint","未安装","原型需要 Windows 桌面版 PowerPoint。",true);
+            object obj;try{obj=Marshal.GetActiveObject("PowerPoint.Application");}catch(COMException){return new CheckResult("PowerPoint","尚未打开","已找到桌面 PowerPoint；打开演示文稿后可使用原型。 ");}
+            dynamic app=obj;return new CheckResult("PowerPoint","已连接","版本 "+(string)app.Version+" · 原型支持拖放、读回和手动更新。");
+        }catch(Exception e){return new CheckResult("PowerPoint","连接失败",Short(e),true);}
+    }
     static CheckResult Writable(string name,string dir){
         string probe=null;try{Directory.CreateDirectory(dir);probe=Path.Combine(dir,"vf-probe-"+Guid.NewGuid().ToString("N")+".tmp");File.WriteAllText(probe,"probe");return new CheckResult(name,"可写",dir);}catch(Exception e){return new CheckResult(name,"不可写",dir+" · "+Short(e),true);}finally{if(probe!=null)try{File.Delete(probe);}catch{}}
     }

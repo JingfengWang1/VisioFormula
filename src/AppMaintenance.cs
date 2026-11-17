@@ -16,20 +16,21 @@ public sealed partial class MainForm {
     void SetReady(Rendered value){var pin=value==null?null:value.Pin();var old=readyPin;ready=value;readyPin=pin;if(old!=null)old.Dispose();}
     void ClearTarget(){target=null;loadedSize=0;binding=null;RefreshBindingUi();}
     void RefreshBindingUi(){
+        if(PowerPointMode){editorMode.Text=target==null?"LaTeX":"编辑公式";tips.SetToolTip(editorMode,target==null?"PowerPoint 原型：手动原位更新":TargetLabel());return;}
         editorMode.Text=binding==null?"LaTeX":preferences.AutoUpdate?(binding.Paused?"同步暂停":"自动更新"):"编辑公式";
         tips.SetToolTip(editorMode,binding==null?"TeX 公式源码":binding.Label+(binding.Paused?"\n"+binding.Reason:"\n仅更新此公式；更换目标请点击“编辑选中公式”。"));
     }
     void InitializeMaintenance(){syncTimer.Tick+=delegate{TryAutoUpdate();};maintenanceTimer.Tick+=async delegate{await CleanIdle();};}
     void StartMaintenance(){syncTimer.Start();if(string.Equals(settings.FilePath,new SettingsStore().FilePath,StringComparison.OrdinalIgnoreCase)){maintenanceTimer.Start();StartupCheck();}}
     void TryAutoUpdate(){
-        if(closing||busy||maintenanceDepth>0||!preferences.AutoUpdate||binding==null)return;
+        if(closing||busy||maintenanceDepth>0||PowerPointMode||!preferences.AutoUpdate||binding==null)return;
         bool canWrite=!binding.Paused&&ready!=null&&object.ReferenceEquals(ready,realtime.Current)&&editClock.ElapsedMilliseconds>=600&&UpdateBinding.SameContent(ready.Formula,Current());
         if(canWrite||bindingClock.ElapsedMilliseconds>=500){bindingClock.Restart();bool alreadyPaused=binding.Paused;int state=binding.Check();if(state!=0){string reason=binding.Reason;if(state==2)ClearTarget();RefreshBindingUi();if(!alreadyPaused||state==2)SetStatus(reason,true);return;}}
         if(canWrite&&binding.NeedsUpdate(ready.Formula))ApplyUpdate(true);
     }
     async void StartupCheck(){
         try{
-            if(!preferences.EnvironmentChecked){var visio=EnvironmentInspector.Visio();var rows=await Task.Run(()=>EnvironmentInspector.Basic(preferences.TexDirectory,settings.FilePath,CacheStore.Default,Path.Combine(AppDomain.CurrentDomain.BaseDirectory,"assets"),lifetime.Token));
+            if(!preferences.EnvironmentChecked){var visio=PowerPointMode?EnvironmentInspector.PowerPoint():EnvironmentInspector.Visio();var rows=await Task.Run(()=>EnvironmentInspector.Basic(preferences.TexDirectory,settings.FilePath,CacheStore.Default,Path.Combine(AppDomain.CurrentDomain.BaseDirectory,"assets"),lifetime.Token));
                 if(closing)return;bool issue=visio.Problem||rows.Any(r=>r.Problem);settingsMenu.Text=issue?"设置（环境需检查）…":"设置…";preferences.EnvironmentChecked=true;SaveSettings();if(issue)SetStatus("部分环境未就绪，可在“更多 → 设置 → 环境检查”查看。",true);
             }
             await Task.Delay(1800,lifetime.Token);await CleanIdle();

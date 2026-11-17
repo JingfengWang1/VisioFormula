@@ -1,6 +1,6 @@
 # Visio Formula：项目交接与实现说明
 
-本文面向接手二次开发的 AI 和开发者，依据仓库中的实际实现整理。功能基线为 **0.9.1**，更新日期为 **2026-11-15（Asia/Shanghai）**。0.9 系列新增环境检查、设置中的可选自动原位更新和 20 MB 缓存管理；0.9.1 将配置统一收进设置，移除“更多”中的重复入口。
+本文面向接手二次开发的 AI 和开发者，依据仓库中的实际实现整理。当前开发基线为 **0.10.0-preview.1**（PowerPoint 技术原型），稳定发布为 0.9.1；更新日期为 **2026-11-17（Asia/Shanghai）**。0.9 系列新增环境检查、设置中的可选自动原位更新和 20 MB 缓存管理；0.9.1 将配置统一收进设置，移除“更多”中的重复入口。
 
 先读本文，再读 [验证记录](VALIDATION.md) 和 [开发约定](../AGENTS.md)。仓库根目录的 `src/` 是唯一开发入口；本机 `work/` 和 `outputs/` 只是未纳入 Git 的工作资料与发布快照。不要在多个副本间交叉修改。
 
@@ -27,7 +27,7 @@
 
 运行平台是 Windows x64、.NET Framework 4.8。UI 使用 WinForms；预览嵌入 `WebBrowser`，其内核是 Windows MSHTML。源码使用 Windows 自带的 C# 5 编译器，当前没有 `.csproj`、SDK 风格项目或 NuGet 依赖。
 
-仓库有 18 个应用源文件和 10 个测试/基准源文件。
+仓库有 21 个应用源文件和 11 个测试/基准源文件。
 
 | 文件 | 主要职责 |
 | --- | --- |
@@ -45,13 +45,16 @@
 | [src/WorkspaceState.cs](../src/WorkspaceState.cs) | 快捷输入配置、当前/历史草稿、带备份的 JSON 文件存储 |
 | [src/EditorDialogs.cs](../src/EditorDialogs.cs) | 快捷输入设置、最近草稿、批量统一样式窗口 |
 | [src/Theme.cs](../src/Theme.cs) | 公共颜色、圆角面板、按钮、菜单、复选框、字体选择器和草稿列表 |
+| [src/FormulaHost.cs](../src/FormulaHost.cs) | 目的端共用传输/选择/读写接口与 Visio 适配器 |
+| [src/PowerPointBridge.cs](../src/PowerPointBridge.cs) | PowerPoint 原生传输、标签协议、稳定图形更新和目标绑定 |
+| [src/AppPowerPoint.cs](../src/AppPowerPoint.cs) | 顶部目的端选择、路由、模式提示及功能限制 |
 | [src/AppMaintenance.cs](../src/AppMaintenance.cs) | 设置入口、首次环境检查、空闲清理、自动更新调度及预览缓存持有 |
 | [src/CacheStore.cs](../src/CacheStore.cs) | 缓存标记、跨进程文件租约、容量/过期策略和保守删除边界 |
 | [src/EnvironmentCheck.cs](../src/EnvironmentCheck.cs) | 工具发现、版本探测、子进程超时取消、环境诊断 |
 | [src/UpdateBinding.cs](../src/UpdateBinding.cs) | 已读回目标的状态快照、外部修改/撤销识别和暂停状态 |
 | [src/MaintenanceDialogs.cs](../src/MaintenanceDialogs.cs) | 通用设置、环境检查、缓存管理窗口 |
 
-测试源码为 `EditorTests.cs`、`ThemeTests.cs`、`RealtimeTests.cs`、`BatchTests.cs`、`ConnectionTests.cs`、`IntegrationTests.cs`、`FontTests.cs`、`LatencyBenchmark.cs`，另有 `MaintenanceTests.cs` 和实际鼠标验证用的 `InteractiveTests.cs`。
+测试源码为 `EditorTests.cs`、`ThemeTests.cs`、`RealtimeTests.cs`、`BatchTests.cs`、`ConnectionTests.cs`、`IntegrationTests.cs`、`FontTests.cs`、`LatencyBenchmark.cs`，新增 PowerPoint 接口测试 `PowerPointTests.cs`；另有 `MaintenanceTests.cs` 和实际鼠标验证用的 `InteractiveTests.cs`。
 
 ```mermaid
 flowchart TD
@@ -219,6 +222,22 @@ SVG 中写入 id 为 `VisioFormula` 的 metadata。Visio 外层公式组在 User
 
 用户保存 `.vsdx` 后源码随文档保存，不依赖本机渲染缓存。换电脑仍需安装本工具、Visio，以及该字体所需的 TeX 环境。截图、位图、手动取消组合或剥离 User 单元格会破坏这种关联。
 
+### 6.5 PowerPoint 原型（0.10.0-preview.1）
+
+用户要求先交付直接拖入、源码保存、重开读回、原位更新和撤销的技术原型。实际鼠标拖放与 Ctrl+Z/Ctrl+Y 由用户验证，不使用 computer use；清单见 [POWERPOINT_CHECKLIST.md](POWERPOINT_CHECKLIST.md)。PowerPoint 自动更新/批量样式尚未实现，不能因接口检查通过就自行启用。
+
+`IFormulaHost` 共用 Copy、Drag、Selected、Read、Update。`VisioHost` 委托原有 Bridge，保留原协议和行为；PowerPointBridge 单独实现。MainForm 的 `bridge` 和 Visio UpdateBinding 继续保留，便于老测试与自动更新兼容。顶部选择的 `Preferences.Destination` 默认为 visio，切换会清空目标和绑定，不改变当前公式。PowerPoint 模式不会创建 Visio 自动更新绑定，批量菜单禁用。
+
+PowerPoint 图形使用无边框矩形与 SVG 填充。已通过检查 `.pptx` 的关系和 media：SVG 被嵌入，存在 `asvg:svgBlip`，不链接缓存。PowerPoint 单位为 point，乘除 72 与 Formula.BaseWidth/BaseHeight 的 inch 单位衔接。更新保留同一形状，替换 Fill.UserPicture、调整宽高/中心，保留旋转及层级；基本动画目标的 ID 保留已有接口覆盖，实际播放由用户验收。原型拒绝组合内公式和非等比缩放下的默认更新。
+
+源码采用 UTF-8 JSON → 十六进制 → 每块 900 字符的 Shape.Tags，最大 1024 块。字段为 VF_PPT_KIND=SVG_FILL_1、VERSION、ID、COUNT、DATA_0…及 HASH；SHA-256 校验完整性。依据 [微软 Tags 文档](https://learn.microsoft.com/en-us/office/vba/api/powerpoint.shape.tags) 规避大小写归一化风险；本机实际标签保留大小写，但协议不依赖这一行为。读回验证版本、块数、校验和、字体、字号和有限正自然尺寸。
+
+PowerPoint Shape/ShapeRange 在本机不提供可直接查询的 COM IDataObject。因此用隐藏暂存 Presentation 构造带标签的图形，Shape.Copy 后 OleGetClipboard 获取 Office 原生提供器，交给现有 OLE DoDragDrop。此路径会改变系统剪贴板，已在界面提示和清单明确说明。不能将 PowerPoint 12.0 Internal Shapes 等格式按 HGLOBAL 字节冻结：探测发现其数据含活动令牌，重新组装 DataObject 会丢失源码。保留原生提供器、暂存文档及缓存 pin；复制和取剪贴板处理短暂占用重试。暂存被关闭后可重建，关闭工具只关闭自己创建的暂存文档，不退出用户的 PowerPoint。
+
+`PowerPointTarget` 固定绑定 Presentation/Slide/Shape ID 和公式身份标签；更新通过原目标定位，不追随当前选择。更新前激活该文档的编辑窗口，以便撤销归属明确。使用 [StartNewUndoEntry](https://learn.microsoft.com/en-us/office/vba/api/powerpoint.application.startnewundoentry) 划分更新前后；临时隐藏副本用于失败恢复样式和元数据，正常结束删除副本。真实一次撤销/重做与异常中断恢复还不能视为已通过用户验收。
+
+`test-powerpoint.ps1` 使用独立配置和自建隐藏文档执行接口检查，不使用鼠标/键盘自动化。MathJax 夹具必须在 STA + Application.Run 的真实消息循环中生成；仅循环 DoEvents 会使异步浏览器调用落到错误线程，曾导致测试本身 InvalidCastException，已改正。用户实际验证结果应追加记录，不要覆盖成“全部通过”。
+
 ## 7. 选中公式与原位更新
 
 读回要求恰好选中一个完整公式组；目前不会自动向父组追溯子图形。错误信息包含连接的文档或选择数量，便于识别多窗口问题。
@@ -345,6 +364,7 @@ Alt+Shift+M/A/C 分别插入矩阵、对齐和 cases 环境；相关环境内提
 | TeX 字体/模板 | test-fonts.ps1；必要时 test-latency.ps1 |
 | 单个导入、复制、保存重开、更新 | run-tests.ps1 |
 | 批量范围与事务 | test-batch.ps1 |
+| PowerPoint 目的端与保存/更新接口 | test-powerpoint.ps1；实际拖放和撤销由用户按清单验收 |
 | 环境、缓存、自动更新、新窗口 DPI | test-maintenance.ps1；无 Visio 可用 -WithoutVisio，并标记未测集成部分 |
 | 实际鼠标拖放 | build-interactive-tests.ps1 构建后运行 InteractiveTests.exe；关闭测试工具会保存并关闭其自建绘图 |
 | 多 Visio 实例连接与目标归属 | test-connection.ps1；按 ACTIVATE 提示真实切换前台窗口 |
@@ -367,7 +387,7 @@ Visio 测试只能操作自己创建且明确拥有的实例/文档。创建实�
 6. **草稿管理**：最近 20 条归档不是连续版本历史，尚无收藏、命名、搜索或可视化逐项删除管理。
 7. **对象选择**：尚不自动把被选中的内部 SVG 子形状提升为公式外层组。取消组合可能破坏可编辑元数据。
 8. **数据校验**：现有持久数据有基本版本和范围校验，进一步强化 NaN/Infinity、超大或语义损坏数据需要补充测试。
-9. **版本元信息**：UI、程序集与 manifest 已更新到 0.9.1；后续发布仍须同步这些入口和文档版本。
+9. **版本元信息**：UI、程序集与 manifest 为 0.10.0 原型（发布标记 0.10.0-preview.1）；后续发布仍须同步这些入口和文档版本。
 10. **打包与授权**：没有安装器、自动更新或 CI 发布流程；项目自有代码的开源许可证尚未指定，第三方许可证已经保留。
 11. **输入边界**：TeX 使用 `-no-shell-escape`，但这不是操作系统文件访问沙箱；当前产品针对本机用户自己输入的公式。
 

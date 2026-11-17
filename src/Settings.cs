@@ -11,12 +11,14 @@ public sealed class Preferences {
     public bool AutoUpdate=false,AutoClean=true,EnvironmentChecked=false;
     public int CacheLimitMB=20,CacheDays=7;
     public string TexDirectory="";
+    public string Destination="visio";
     public Preferences Clone(){return (Preferences)MemberwiseClone();}
     public void Validate(){
         if(FontCatalog.IndexOf(Font)<0)Font="latex";
         if(CacheLimitMB<1||CacheLimitMB>10240)CacheLimitMB=20;
         if(CacheDays<1||CacheDays>365)CacheDays=7;
         if(TexDirectory==null)TexDirectory="";
+        if(Destination!="visio"&&Destination!="powerpoint")Destination="visio";
         if(double.IsNaN(Size)||double.IsInfinity(Size)||Size<4||Size>96)Size=12;
         if(Zoom!=0&&Zoom!=100&&Zoom!=150&&Zoom!=200&&Zoom!=300)Zoom=150;
     }
